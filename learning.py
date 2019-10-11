@@ -7,7 +7,6 @@ from human import Human
 # db:
 humans = []
 kitchen = {}
-
 # input file
 vr_data = pd.read_csv("/home/thomas/new_nameisthiscsvname_short.csv", na_values="NIL").dropna()
 

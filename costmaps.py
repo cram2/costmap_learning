@@ -1,7 +1,7 @@
 from matplotlib.patches import Ellipse
 from mpl_toolkits.mplot3d import Axes3D
 from sklearn.mixture import GaussianMixture
-from sklearn.cluster import KMeans
+from sklearn.cluster import KMeans, AgglomerativeClustering
 from sklearn.metrics import silhouette_samples, silhouette_score
 import matplotlib.cm as cm
 
@@ -11,18 +11,60 @@ import numpy as np
 
 class Costmap:
 
-    def __init__(self, object_id, table_id, context, data):
-        self.object_id = object_id
-        self.table_id = table_id
-        self.context = context
-        random_state = 42
+    def __init__(self, object_id, table_id, context, data, random_state=42,
+                 minimum_sample_size=25):
+        try:
+            self.context = str(context)
+            self.object_id = str(object_id)
+            self.table_id = str(table_id)
+        except ValueError:
+            print("object_id, table_id and context should be possible to be strings")
+            return
+        if data.shape < (minimum_sample_size, 0):
+            print("Sample size for object type ", object_id, " is to small.")
+            return
+        self.raw_data = data  # save raw_data so costmaps can be updated or replaced
+        self.object_storage = []  # lists of tuples [('storage_name', number)]
+        self.add_object_storage(data)  # saves storage information in self.object_storage
         optimal_n_components = self.get_component_amount(data, random_state=random_state)
-        self.clf = GaussianMixture(n_components=optimal_n_components, random_state=random_state)
+        self.clf = GaussianMixture(n_components=optimal_n_components, random_state=random_state,
+                                   init_params="kmeans")
         self.clf = self.clf.fit(data[["x", "y"]])
-        self.plot_gmm(self.clf, data[["x", "y"]])
+        #self.plot_gmm(self.clf, data[["x", "y"]])
+
+    def add_object_storage(self, data):
+        """Saves where the object in data was storaged in the kitchen"""
+        object_types = np.unique(data["object-type"])
+        if len(object_types) == 1 and object_types == self.object_id:
+            for storage in np.unique(data["from-location"]):
+                # Get how often self.object_id was taken from storage
+                new_value = len(data[data["from-location"] == storage])
+                # If storage was already added in self.object_storage this will be updated here
+                updated = False
+                for i, n in enumerate(self.object_storage):
+                    if str(storage) == n[0]:
+                        updated = True
+                        old_value = self.object_storage[i][1]
+                        self.object_storage[i] = (str(storage), old_value + new_value)
+                        break
+                # If storage is not in self.object_storage it will be appended
+                if not updated:
+                    self.object_storage.append((str(storage), new_value))
+            # Sort for getting later the storages ordered
+            self.object_storage.sort(key=lambda t: t[1])
+        else:
+            print("The given data contains more than one object type or wrong object type data set was given.")
+
+    def export(self):
+        pass
+        # if self.clf:
+        #    components = self.clf.weights_[0]
+        #    cluster = AgglomerativeClustering(n_clusters=components).fit(self.raw_data[["x", "y"]])
+        #    for i in range(0, cluster.n_leaves):
 
     def get_component_amount(self, data, min_n_clusters=2, max_n_clusters=10,
-                             verbose=False, visualize=True, random_state=42):
+                             verbose=False, visualize=False, random_state=42):
+        """Returns the optimal amount of components to separate the data with GMMs"""
         if max_n_clusters <= min_n_clusters:
             raise Exception("max_n_clusters has to be bigger than min_n_clusters")
 
@@ -33,8 +75,7 @@ class Costmap:
             clfs = []
         if verbose:
             print("Following scores for object-type ",
-                  str(self.object_type), " on table ", str(self.table_id),
-                  ":")
+                  str(self.object_type), " on table ", str(self.table_id), ":")
 
         for n_clusters in range(min_n_clusters, max_n_clusters):
             clf = KMeans(n_clusters=n_clusters, random_state=random_state).fit(X)
