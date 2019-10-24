@@ -13,8 +13,8 @@ from costmaps import Costmap
 class Settings:
 
     def __init__(self, table_id, table_data):
-        self.table_id = table_id # str als id for tables
-        self.contexts = {} # list of costmaps for each dict elem
+        self.table_id = table_id  # str als id for tables
+        self.contexts = {}  # list of costmaps for each dict elem
         for context in np.unique(table_data["context"]):
             context_data = table_data.loc[table_data["context"] == str(context)]
             self.add_context_per_object_type(str(context), context_data)

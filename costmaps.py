@@ -1,9 +1,10 @@
 from matplotlib.patches import Ellipse
 from mpl_toolkits.mplot3d import Axes3D
 from sklearn.mixture import GaussianMixture
-from sklearn.cluster import KMeans, AgglomerativeClustering
+from sklearn.cluster import KMeans
 from sklearn.metrics import silhouette_samples, silhouette_score
 import matplotlib.cm as cm
+import pandas as pd
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -12,7 +13,7 @@ import numpy as np
 class Costmap:
 
     def __init__(self, object_id, table_id, context, data, random_state=42,
-                 minimum_sample_size=25):
+                 minimum_sample_size=25, gmm_clf=None):
         try:
             self.context = str(context)
             self.object_id = str(object_id)
@@ -20,17 +21,23 @@ class Costmap:
         except ValueError:
             print("object_id, table_id and context should be possible to be strings")
             return
-        if data.shape < (minimum_sample_size, 0):
+        if data.shape < (minimum_sample_size, 0) and not gmm_clf:
             print("Sample size for object type ", object_id, " is to small.")
             return
         self.raw_data = data  # save raw_data so costmaps can be updated or replaced
         self.object_storage = []  # lists of tuples [('storage_name', number)]
-        self.add_object_storage(data)  # saves storage information in self.object_storage
-        optimal_n_components = self.get_component_amount(data, random_state=random_state)
-        self.clf = GaussianMixture(n_components=optimal_n_components, random_state=random_state,
+        #self.add_object_storage(data)  # saves storage information in self.object_storage
+        if not gmm_clf:
+            optimal_n_components = self.get_component_amount(data, random_state=random_state)
+            self.clf = GaussianMixture(n_components=optimal_n_components, random_state=random_state,
                                    init_params="kmeans")
-        self.clf = self.clf.fit(data[["x", "y"]])
-        #self.plot_gmm(self.clf, data[["x", "y"]])
+            self.clf = self.clf.fit(data[["x", "y"]])
+        else:
+            self.clf = gmm_clf
+        self.related_costmaps = {}
+        # self.plot_gmm(self.clf, data[["x", "y"]])
+        # clf = BayesianGaussianMixture(n_components=5, random_state=random_state).fit(data[["x", "y"]])
+        # self.plot_gmm(clf, data[["x", "y"]])
 
     def add_object_storage(self, data):
         """Saves where the object in data was storaged in the kitchen"""
@@ -55,12 +62,47 @@ class Costmap:
         else:
             print("The given data contains more than one object type or wrong object type data set was given.")
 
+    def add_related_costmaps(self, costmaps, random_state=42, relation_seperation="<->"):
+        for costmap in costmaps:
+            if costmap.object_id != self.object_id:
+                i, j = self.colliding(costmap)
+                if not (i is None or j is None):
+                    # Copy x, y data from this and other costmap
+                    raw_data_cpy = self.raw_data[["x", "y"]].copy()
+                    other_raw_data_cpy = costmap.raw_data[["x", "y"]].copy()
+                    # Use only x, y data which are in the component i in self and j in given costmap
+                    raw_data_cpy = raw_data_cpy[self.clf.predict(raw_data_cpy.to_numpy()) == i]
+                    other_raw_data_cpy = other_raw_data_cpy[costmap.clf.predict(other_raw_data_cpy.to_numpy()) == j]
+                    # Merge the filtered x and y data
+                    merged_data = pd.DataFrame().append(raw_data_cpy).append(other_raw_data_cpy)
+                    # Copy the means and cov from the component i in self and j in given costmap
+                    means_i, means_j = self.clf.means_[i], costmap.clf.means_[j]
+                    cov_i, cov_j = self.clf.covariances_[i], costmap.clf.covariances_[j]
+                    # create a new GMM representing the relation of self and given costmap
+                    gmm = GaussianMixture(n_components=2, means_init=[means_i, means_j],
+                                          precisions_init=[np.linalg.inv(cov_i), np.linalg.inv(cov_j)],
+                                          random_state=random_state)
+                    # and save it in self inside a costmap
+                    self.related_costmaps[costmap.object_id] = Costmap(self.object_id + relation_seperation + costmap.object_id,
+                                                                       self.table_id, self.context, merged_data,
+                                                                       gmm_clf=gmm)
+                    print("created relation ", self.object_id + relation_seperation + costmap.object_id)
+
+    def colliding(self, costmap):
+        if self.clf and costmap and costmap.clf:
+            for r in range(0, self.clf.n_components):
+                for s in range(0, self.clf.n_components):
+                    if True: # todo do smart spooky math things
+                        return r, s
+
+
     def export(self):
         pass
-        # if self.clf:
-        #    components = self.clf.weights_[0]
-        #    cluster = AgglomerativeClustering(n_clusters=components).fit(self.raw_data[["x", "y"]])
-        #    for i in range(0, cluster.n_leaves):
+        #if self.clf:
+
+
+    def merge(self, other):
+        pass
 
     def get_component_amount(self, data, min_n_clusters=2, max_n_clusters=10,
                              verbose=False, visualize=False, random_state=42):
@@ -162,8 +204,10 @@ class Costmap:
                      "with their Silhouette Scores", fontsize=14)
         plt.show()
 
-    def plot_gmm(self, gmm, X, label=True, ax=None):
+    def plot_gmm(self, label=True, ax=None):
         ax = ax or plt.gca()
+        gmm = self.clf
+        X = self.raw_data[["x", "y"]]
         labels = gmm.fit(X).predict(X)
         if label:
             ax.scatter(X["x"], X["y"], c=labels, s=40, cmap='viridis', zorder=2)

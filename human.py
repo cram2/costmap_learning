@@ -24,6 +24,7 @@ class Human:
 #        for table in kitchen.settings_by_table.values():
 #            self.add_table(table)
 
+
     def __eq__(self, other):
         return self.name == other.name
 
