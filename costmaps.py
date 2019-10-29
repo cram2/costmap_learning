@@ -1,19 +1,24 @@
+import matplotlib.pyplot as plt
+import matplotlib.cm as cm
 from matplotlib.patches import Ellipse
 from mpl_toolkits.mplot3d import Axes3D
+
+import numpy as np
+from scipy import linalg
+import pandas as pd
+from sklearn.exceptions import NotFittedError
+
 from sklearn.mixture import GaussianMixture
 from sklearn.cluster import KMeans
 from sklearn.metrics import silhouette_samples, silhouette_score
-import matplotlib.cm as cm
-import pandas as pd
 
-import matplotlib.pyplot as plt
-import numpy as np
+from matrix import OutputMatrix
 
 
 class Costmap:
 
     def __init__(self, object_id, table_id, context, data, random_state=42,
-                 minimum_sample_size=25, gmm_clf=None):
+                 minimum_sample_size=10, gmm_clf=None):
         try:
             self.context = str(context)
             self.object_id = str(object_id)
@@ -26,12 +31,11 @@ class Costmap:
             return
         self.raw_data = data  # save raw_data so costmaps can be updated or replaced
         self.object_storage = []  # lists of tuples [('storage_name', number)]
-        #self.add_object_storage(data)  # saves storage information in self.object_storage
+        # self.add_object_storage(data)  # saves storage information in self.object_storage
         if not gmm_clf:
             optimal_n_components = self.get_component_amount(data, random_state=random_state)
             self.clf = GaussianMixture(n_components=optimal_n_components, random_state=random_state,
-                                   init_params="kmeans")
-            self.clf = self.clf.fit(data[["x", "y"]])
+                                       init_params="kmeans").fit(data[["x", "y"]])
         else:
             self.clf = gmm_clf
         self.related_costmaps = {}
@@ -69,6 +73,7 @@ class Costmap:
                 if not (i is None or j is None):
                     # Copy x, y data from this and other costmap
                     raw_data_cpy = self.raw_data[["x", "y"]].copy()
+                    #print(costmap.object_id)
                     other_raw_data_cpy = costmap.raw_data[["x", "y"]].copy()
                     # Use only x, y data which are in the component i in self and j in given costmap
                     raw_data_cpy = raw_data_cpy[self.clf.predict(raw_data_cpy.to_numpy()) == i]
@@ -83,26 +88,67 @@ class Costmap:
                                           precisions_init=[np.linalg.inv(cov_i), np.linalg.inv(cov_j)],
                                           random_state=random_state)
                     # and save it in self inside a costmap
-                    self.related_costmaps[costmap.object_id] = Costmap(self.object_id + relation_seperation + costmap.object_id,
-                                                                       self.table_id, self.context, merged_data,
-                                                                       gmm_clf=gmm)
+                    self.related_costmaps[costmap.object_id] = Costmap(
+                        self.object_id + relation_seperation + costmap.object_id,
+                        self.table_id, self.context, merged_data,
+                        gmm_clf=gmm)
                     print("created relation ", self.object_id + relation_seperation + costmap.object_id)
 
     def colliding(self, costmap):
-        if self.clf and costmap and costmap.clf:
+        if costmap:
             for r in range(0, self.clf.n_components):
                 for s in range(0, self.clf.n_components):
-                    if True: # todo do smart spooky math things
+                    if True:  # todo do smart spooky math things
                         return r, s
 
+    def get_boundries(self, n_samples=100, component_i=0):
+        """:return the smallest x0 and y0 value in the GMM and the width and height of given component in GMM"""
+        gmm = self.clf
+        X = []
+        try:
+            X, _ = gmm.sample(n_samples=100)
+        except NotFittedError:
+            vr_data = self.raw_data[["x", "y"]].to_numpy()
+            gmm = gmm.fit(vr_data)
+            X, _ = gmm.sample(n_samples=100)
+        covars = gmm.covariances_
+        covar = covars[component_i]
+        means = gmm.means_
+        mean = means[component_i]
+        v, _ = linalg.eigh(covar)
+        v = 20. * np.sqrt(2.) * np.sqrt(v) # factor is normally 2 for 99%
+        x0 = mean[0] - (v[0] / 2)
+        y0 = mean[1] - (v[1] / 2)
+        return OutputMatrix(x0, y0, v[0], v[1])
 
-    def export(self):
-        pass
-        #if self.clf:
+    def get_values(self, x, y):
+        r = 0
+        for i in range(0, len(self.clf.means_)):
+            r += self.get_value(x, y, i)
+        return r
 
+    def get_value(self, x, y, component_i=0):
+        return self.clf.predict_proba([[x, y]])[0][component_i]
 
-    def merge(self, other):
-        pass
+    def merge_related_into_matrix(self, resolution=0.02):
+        relations = self.related_costmaps
+        output_matrix = None
+        res = []
+        if relations:
+            for relation_name, relation in relations.items():
+                if relation.clf.n_components == 2:
+                    output_matrix = relation.costmap_to_output_matrices(resolution=resolution)[0]
+                    res.append(output_matrix)
+                else:
+                    raise ValueError("oy, this ", relation.object_id, " aint no relation costmap mate.")
+            #print("going to merge these relations")
+            #print(res)
+            return OutputMatrix.merge_matrices(res, resolution=resolution)
+
+    def merge(self, other, self_component=0, o_component=0, resolution=0.02):
+        output_matrix = self.costmap_to_output_matrices(resolution)[self_component]
+        other_output_matrix = other.costmap_to_output_matrixs(resolution)[o_component]
+        return OutputMatrix.merge_matrices([output_matrix, other_output_matrix], resolution=resolution)
 
     def get_component_amount(self, data, min_n_clusters=2, max_n_clusters=10,
                              verbose=False, visualize=False, random_state=42):
@@ -204,7 +250,7 @@ class Costmap:
                      "with their Silhouette Scores", fontsize=14)
         plt.show()
 
-    def plot_gmm(self, label=True, ax=None):
+    def plot_gmm(self, label=True, ax=None, Test=False):
         ax = ax or plt.gca()
         gmm = self.clf
         X = self.raw_data[["x", "y"]]
@@ -220,7 +266,8 @@ class Costmap:
         plt.title("GMM with %d components" % len(gmm.means_), fontsize=(20))
         plt.xlabel("X")
         plt.ylabel("Y")
-        plt.show()
+        if not Test:
+            plt.show()
 
     def draw_ellipse(self, position, covariance, ax=None, **kwargs):
         """Draw an ellipse with a given position and covariance"""
@@ -238,3 +285,20 @@ class Costmap:
         for nsig in range(1, 4):
             ax.add_patch(Ellipse(position, nsig * width, nsig * height,
                                  angle, **kwargs))
+
+    def costmap_to_output_matrices(self, resolution=0.02, n_components=[]):
+        output_matrices = []
+        for i in range(0, self.clf.n_components):
+            empty_output_matrix = self.get_boundries(i)
+            x_steps = abs(int(empty_output_matrix.width / resolution))
+            y_steps = abs(int(empty_output_matrix.height / resolution))
+            res = np.zeros((x_steps, y_steps))
+            for x in range(0, x_steps):
+                for y in range(0, y_steps):
+                    res[x][y] = self.get_value(empty_output_matrix.x + x * resolution,
+                                               empty_output_matrix.y + y * resolution,
+                                               i)
+            output_matrix = empty_output_matrix.copy()
+            output_matrix.insert(res)
+            output_matrices.append(output_matrix)
+        return output_matrices
