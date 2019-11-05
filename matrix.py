@@ -1,3 +1,5 @@
+import time
+
 import matplotlib.pyplot as plt
 import numpy as np
 
@@ -22,10 +24,6 @@ class OutputMatrix(object):
 
     def get_value(self, other, x_i, y_i, resolution=0.02):
         if other and x_i >= 0 and y_i >= 0:
-            #print(len(self.matrix[0]))
-            #print(int((other.x - self.x) / resolution) + x_i)
-            #print(len(self.matrix))
-            #print(int((other.y - self.y) / resolution) + y_i)
             return self.matrix[int((other.x - self.x) / resolution) + x_i][
                 int((other.y - self.y) / resolution) + y_i]
 
@@ -63,6 +61,35 @@ class OutputMatrix(object):
                     return merged
                 merged = output_matrices[i].merge(output_matrices[i + 1], resolution=resolution)
             return merged
+
+    @staticmethod
+    def summarize(output_matrices, resolution=0.02):
+        x0 = min(list(map(lambda o: o.x, output_matrices)))
+        y0 = min(list(map(lambda o: o.y, output_matrices)))
+        x1 = max(list(map(lambda o: o.x + o.width, output_matrices)))
+        y1 = max(list(map(lambda o: o.y + o.height, output_matrices)))
+        w = abs(x1 - x0)
+        h = abs(y1 - y0)
+        sum = OutputMatrix(x0, y0, w, h)
+        s = w / resolution
+        z = h / resolution
+        s = int(s)
+        z = int(z)
+        m = np.zeros((z, s))
+        n = len(output_matrices)
+        for output_matrix_i in range(0, n):
+            x_i0 = int(abs((output_matrices[output_matrix_i].x - x0) / resolution))
+            y_i0 = int(abs((output_matrices[output_matrix_i].y - y0) / resolution))
+            x_steps = output_matrices[output_matrix_i].matrix.shape[1]
+            y_steps = output_matrices[output_matrix_i].matrix.shape[0]
+            i_start = (z - y_i0) - y_steps
+            i_end = z - y_i0
+            j_start = x_i0
+            j_end = x_i0 + x_steps
+            m[i_start:i_end, j_start:j_end][:] = output_matrices[output_matrix_i].matrix[:]
+        sum.insert(m)
+        return sum
+
 
     def colliding(self, other):
         return True
@@ -111,6 +138,6 @@ class OutputMatrix(object):
 
     def plot(self, text):
         plt.title(text)
-        plt.imshow(self.matrix)
+        plt.imshow(self.matrix, extent=[self.x, self.x + self.width, self.y, self.y + self.height], alpha=0.5)
         plt.colorbar()
         plt.show()

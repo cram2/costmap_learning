@@ -5,13 +5,12 @@ from costmaps import Costmap
 
 class Settings:
 
-    def __init__(self, table_id, table_data):
+    def __init__(self, table_id, table_data, context_feature="context"):
         self.table_id = table_id  # str als id for tables
         self.contexts = {}  # list of costmaps for each dict elem
-        for context in np.unique(table_data["context"]):
-            context_data = table_data.loc[table_data["context"] == str(context)]
+        for context in np.unique(table_data[context_feature]):
+            context_data = table_data.loc[table_data[context_feature] == str(context)]
             self.add_context_per_object_type(str(context), context_data)
-            # self.add_context(str(context), table_data.loc[table_data["context"] == str(context)])
 
     def add_context_per_object_type(self, context_name, context_data):
         # Init list of costmaps for specific context in self.contexts
@@ -39,5 +38,5 @@ class Settings:
                 else:
                     self.contexts[context_name].append(costmap)
             else:
-                print("Costmap for object type ", str(object), "could not be created.")
+                print("Costmap for object type ", str(object), " could not be created.")
 
