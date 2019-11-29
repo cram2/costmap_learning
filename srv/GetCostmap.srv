@@ -1,0 +1,13 @@
+string object_type # type of the object one wants the costmap for
+string context # describing the task proceeded during the vr data collection
+string name # name of the human who recorded the vr data
+string kitchen # name of the kitchen
+string table_id # name of the table
+---
+geometry_msgs/Point bottem_left # bottom left point of x_y_points in the map frame of kitchen
+float64 z_coordinate 
+float64 resolution # resolution of x_y_points in [m]
+float64 width # width of x_y_points in [m]
+float64 height # height of x_y_points in [m]
+float64[] x_y_vecs # 1d-array of vecs corresponding to the height filled with values from [0, 1]
+float64[] angles # angles for every slot in x_y_points

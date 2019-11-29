@@ -1,0 +1,9 @@
+string object_type
+string context
+string name 
+string kitchen
+string table_id
+bool storage
+---
+string location
+
