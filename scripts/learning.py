@@ -1,7 +1,7 @@
 # coding: utf-8
 import numpy as np
 import pandas as pd
-from rospy import roswarn
+from rospy import logwarn
 
 # from human import Human
 from kitchen import Kitchen
@@ -14,8 +14,8 @@ cram_obj_t_to_vr_obj_t_dict = {
     "KNIFE": ["KnifeTable"],
     "PLATE": ["PlateClassic28"],
     "CUP": ["Cup", "GlassRound", "GlassTall"],
-    "BREAKFAST-CEREAL": ["KoellnMuesliKnusperHonigNuss",
-                         "JaNougatBits",
+    "BREAKFAST-CEREAL": ["JaNougatBits",
+                         "KoellnMuesliKnusperHonigNuss",
                          "KoellnMuesliCranberry"],
     "MILK": ["BaerenMarkeFrischeAlpenmilch38"],
     "BOTTLE": ["HohesCOrange"]
@@ -32,11 +32,11 @@ def fit_data(full_path="/home/thomas/nameisthiscsvname_with_full_setup_2_short.c
                                         human_feature=human_feature)
 
 def get_symbolic_location(req):
-    storage_p = str(req.storage)
+    storage_p = req.storage
     try:
         object_id = cram_obj_t_to_vr_obj_t_dict[req.object_type][0]
     except KeyError:
-        roswarn("%s is no known object_type", req.object_type)
+        logwarn("%s is no known object_type", req.object_type)
         return
     kitchen_name = str(req.kitchen)
     context = str(req.context)
@@ -55,7 +55,7 @@ def get_costmap(req):
     try:
         object_id = cram_obj_t_to_vr_obj_t_dict[req.object_type][0]
     except KeyError:
-        roswarn("%s is no known object_type", req.object_type)
+        logwarn("%s is no known object_type", req.object_type)
         return
     print(object_id)
     context_name = req.context
