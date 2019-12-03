@@ -31,7 +31,10 @@ class Kitchen:
         and table_id"""
         for human in self.humans:
             if human.name == human_name:
-                return human.get_object(table_id, context, object_id).object_storage[0][0]
+                return "IslandArea"
+                #return human.get_object(table_id, context,
+                #object_id).object_storage[0][0] <- bull, since only
+                #destinations are saved
 
     def get_costmap(self, table_id, context_name, human_name, object_id):
         for human in self.humans:
