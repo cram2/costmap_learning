@@ -21,7 +21,7 @@ from sklearn.model_selection import train_test_split
 from matrix import OutputMatrix
 
 
-class Costmap:
+class Object:
 
     def __init__(self, object_id, table_id, context, data, random_state=42,
                  minimum_sample_size=10, optimal_n_components=None):
@@ -110,7 +110,7 @@ class Costmap:
                                                   random_state=random_state)
                             relation_name = self.object_id + str(i) + relation_seperation + costmap.object_id + str(j)
                             # and save it in self inside a costmap
-                            self.related_costmaps[relation_name] = Costmap(
+                            self.related_costmaps[relation_name] = Object(
                                 self.object_id + relation_seperation + costmap.object_id,
                                 self.table_id, self.context, merged_data,
                                 optimal_n_components=2)
