@@ -5,6 +5,8 @@ from rospy import logwarn
 
 # from human import Human
 from kitchen import Kitchen
+from costmap import *
+from item import *
 
 # fancy db:
 kitchens = {}
@@ -22,7 +24,7 @@ cram_obj_t_to_vr_obj_t_dict = {
     } ## TODO: muss mit einer reasoning-fun in die reasoning.py
 
 
-def fit_data(full_path="/home/thomas/nameisthiscsvname_with_full_setup_2_short.csv",
+def fit_data(full_path="/home/thomas/nameisthiscsvname_short.csv",
              kitchen_feature="kitchen_name", human_feature="human_name"):
     vr_data = pd.read_csv(full_path, na_values="NIL").dropna()
     for kitchen_name in np.unique(vr_data[kitchen_feature]):
@@ -70,12 +72,12 @@ def get_costmap(req):
         return kitchens[kitchen_name].get_costmap(table_id, context_name, human_name, object_id)
 
 
-def vis_learned_data(with_relation=False):
+def vis_learned_data(with_relation=True):
     for kitchen in kitchens.values():
-        costmaps = kitchen.humans[0].settings_by_table["rectangular_table"].contexts["BREAKFAST"]
+        costmaps = kitchen.humans[0].settings_by_table["rectangular_table"].contexts["TABLE-SETTING"]
         i = 0
         for costmap in costmaps:
-            cpy = costmaps[:]
+            cpy = list(map(lambda object: object.dest_costmap, costmaps[:]))
             del cpy[i]
             # costmap.plot_gmm()
             # for i in range(0, costmap.clf.n_components):
@@ -86,10 +88,12 @@ def vis_learned_data(with_relation=False):
             #    relation.costmap_to_output_matrices()[0].plot(relation.object_id)
             if with_relation:  # with_relation:
                 costmap.add_related_costmaps(cpy)
-                costmap.plot_gmm(plot_in_other=True)
+                costmap.dest_costmap.plot_gmm(plot_in_other=True)
                 costmap.merge_related_into_matrix().plot(costmap.object_id + " with related")
-            costmap.plot_gmm(plot_in_other=True)
-            costmap.output_matrix.plot(costmap.object_id)
+            costmap.dest_costmap.plot_gmm(plot_in_other=True)
+            costmap.dest_costmap.output_matrix.plot("Destination of " + costmap.object_id)
+            costmap.storage_costmap.plot_gmm(plot_in_other=True)
+            costmap.storage_costmap.output_matrix.plot("Storage of " + costmap.object_id)
             # for k, cr in costmap.related_costmaps.items():
             # print(k)
             # print(cr)
@@ -98,4 +102,4 @@ def vis_learned_data(with_relation=False):
 
 def init_dataset():
     fit_data()
-    #vis_learned_data()
+    vis_learned_data()

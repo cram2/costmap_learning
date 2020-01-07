@@ -21,15 +21,17 @@ from sklearn.model_selection import train_test_split
 from matrix import OutputMatrix
 
 
-class Object:
+class Costmap:
 
     def __init__(self, object_id, table_id, context, data, random_state=42,
-                 minimum_sample_size=10, optimal_n_components=None):
+                 x_name="x", y_name="y", minimum_sample_size=10, optimal_n_components=None):
         try:
             self.resolution = 0.01
             self.context = str(context)
             self.object_id = str(object_id)
             self.table_id = str(table_id)
+            self.x_name = x_name
+            self.y_name = y_name
         except ValueError:
             print("object_id, table_id and context should be possible to be strings")
             return
@@ -37,103 +39,20 @@ class Object:
             print("Sample size for object type ", object_id, " is too small. Ignored.")
             return
         self.raw_data = data  # save raw_data so costmaps can be updated or replaced
-        self.object_storage = []  # lists of tuples [('storage_name', number)]
-        self.add_object_storage(data)  # saves storage information in self.object_storage
         if not optimal_n_components:
             optimal_n_components = self.get_component_amount(data, random_state=random_state)
-        # X_train, X_test = train_test_split(data[["x", "y"]], test_size=.1)
+        # X_train, X_test = train_test_split(data[[self.x_name, self.y_name]], test_size=.1)
         self.clf = GaussianMixture(n_components=optimal_n_components, random_state=random_state,
-                                   init_params="kmeans").fit(data[["x", "y"]])
+                                   init_params="kmeans").fit(data[[self.x_name, self.y_name]])
         # kernel = 1.0 * RBF([1.0]) # check if RBF([1.0]) or RBF([1.0, 1.0]) with
         # https://scikit-learn.org/stable/auto_examples/gaussian_process/plot_gpc.html#sphx-glr-auto-examples-gaussian-process-plot-gpc-py
         # y = self.clf.predict(X_train) # TODO REPLACE y WITH REAL y!
         # y_pred = self.clf.predict(X_test)
         # self.output_clf = GaussianProcessClassifier(kernel=kernel).fit(X_train, y)
         self.output_matrix = self.costmap_to_output_matrix()
-        self.related_costmaps = {}
-        # self.plot_gmm(self.clf, data[["x", "y"]])
-        # clf = BayesianGaussianMixture(n_components=5, random_state=random_state).fit(data[["x", "y"]])
-        # self.plot_gmm(clf, data[["x", "y"]])
-
-    def get_object_storage(self):
-        if self.object_storage:
-            return self.object_storage[0][0]
-        else:
-            raise AttributeError("The object storage was empty or was not initialized.")
-
-    def add_object_storage(self, data):
-        """Saves where the object in data was storaged in the kitchen"""
-        object_types = np.unique(data["object-type"])
-        if len(object_types) == 1 and object_types == self.object_id:
-            for storage in np.unique(data["from-location"]):
-                # Get how often self.object_id was taken from storage
-                new_value = len(data[data["from-location"] == storage])
-                # If storage was already added in self.object_storage this will be updated here
-                updated = False
-                for i, n in enumerate(self.object_storage):
-                    if str(storage) == n[0]:
-                        updated = True
-                        old_value = self.object_storage[i][1]
-                        self.object_storage[i] = (str(storage), old_value + new_value)
-                        break
-                # If storage is not in self.object_storage it will be appended
-                if not updated:
-                    self.object_storage.append((str(storage), new_value))
-            # Sort for getting later the storages ordered
-            self.object_storage.sort(key=lambda t: t[1])
-        else:
-            print("The given data contains more than one object type or wrong object type data set was given.")
-
-    def add_related_costmaps(self, costmaps, random_state=42, relation_seperation="<->"):
-        for costmap in costmaps:
-            if costmap.object_id != self.object_id:
-                if True:
-                    indices = self.nearest_components(costmap)
-                    for pair in indices:
-                        i = pair[0]
-                        j = pair[1]
-                        if not (i is None or j is None):
-                            # Copy x, y data from this and other costmap
-                            raw_data_cpy = self.raw_data[["x", "y"]].copy()
-                            other_raw_data_cpy = costmap.raw_data[["x", "y"]].copy()
-                            # Use only x, y data which are in the component i in self and j in given costmap
-                            raw_data_cpy = raw_data_cpy[self.clf.predict(raw_data_cpy.to_numpy()) == i]
-                            other_raw_data_cpy = other_raw_data_cpy[costmap.clf.predict(other_raw_data_cpy.to_numpy()) == j]
-                            # Merge the filtered x and y data
-                            merged_data = pd.DataFrame().append(raw_data_cpy).append(other_raw_data_cpy)
-                            # Copy the means and cov from the component i in self and j in given costmap
-                            means_i, means_j = self.clf.means_[i], costmap.clf.means_[j]
-                            cov_i, cov_j = self.clf.covariances_[i], costmap.clf.covariances_[j]
-                            # create a new GMM representing the relation of self and given costmap
-                            gmm = GaussianMixture(n_components=2, means_init=[means_i, means_j],
-                                                  precisions_init=[np.linalg.inv(cov_i), np.linalg.inv(cov_j)],
-                                                  random_state=random_state)
-                            relation_name = self.object_id + str(i) + relation_seperation + costmap.object_id + str(j)
-                            # and save it in self inside a costmap
-                            self.related_costmaps[relation_name] = Object(
-                                self.object_id + relation_seperation + costmap.object_id,
-                                self.table_id, self.context, merged_data,
-                                optimal_n_components=2)
-                            print("created relation ", self.object_id + str(i) + relation_seperation
-                                  + costmap.object_id + str(j))
-
-    def nearest_components(self, costmap):
-        res = []
-        if costmap:
-            s_means = self.clf.means_
-            o_means = costmap.clf.means_
-            indices = []
-            for s_i in range(0, len(s_means)):
-                for o_i in range(0, len(o_means)):
-                    distance = np.linalg.norm(s_means[s_i] - o_means[o_i])
-                    new = np.array([s_i, o_i, distance])
-                    indices.append(new)
-            indices = np.array(indices)
-            for s_i in range(0, len(s_means)):
-                tmp = indices[indices[:, 0] == s_i]
-                tmp = sorted(tmp, key=lambda l: l[2])
-                res.append([int(s_i), int(tmp[0][1])])
-            return res
+        # self.plot_gmm(self.clf, data[[self.x_name, self.y_name]])
+        # clf = BayesianGaussianMixture(n_components=5, random_state=random_state).fit(data[[self.x_name, self.y_name]])
+        # self.plot_gmm(clf, data[[self.x_name, self.y_name]])
 
     def get_boundries(self, n_samples=100, component_i=0, std=7.0):
         """:return the smallest x0 and y0 value in the GMM and the width and height of given component in GMM"""
@@ -142,7 +61,7 @@ class Object:
         try:
             X, _ = gmm.sample(n_samples=n_samples)
         except NotFittedError:
-            vr_data = self.raw_data[["x", "y"]].to_numpy()
+            vr_data = self.raw_data[[self.x_name, self.y_name]].to_numpy()
             gmm = gmm.fit(vr_data)
             X, _ = gmm.sample(n_samples=n_samples)
         covars = gmm.covariances_
@@ -197,20 +116,6 @@ class Object:
         # return 2 * math.exp(-1 * ((((x - x_0) ** 2) / ( 2 * s_x)) + (((y - y_0) ** 2) / ( 2 * s_y))))
         # return p_in_component * self.clf.predict_proba([[x, y]])[0][component_i]
 
-    def merge_related_into_matrix(self):
-        relations = self.related_costmaps
-        output_matrix = None
-        res = []
-        if relations:
-            for relation_name, relation in relations.items():
-                if relation.clf.n_components == 2:
-                    #relation.costmap_to_output_matrices()[0].plot(relation_name)
-                    output_matrix = relation.costmap_to_output_matrices()[0]
-                    res.append(output_matrix)
-                else:
-                    raise ValueError("oy, this ", relation.object_id, " aint no relation costmap mate.")
-            return OutputMatrix.summarize(res)
-
     def merge(self, other, self_component=0, o_component=0):
         output_matrix = self.costmap_to_output_matrices()[self_component]
         other_output_matrix = other.costmap_to_output_matrices()[o_component]
@@ -222,7 +127,7 @@ class Object:
         if max_n_clusters <= min_n_clusters:
             raise Exception("max_n_clusters has to be bigger than min_n_clusters")
 
-        X = data[["x", "y"]]
+        X = data[[self.x_name, self.y_name]]
         silhouette_avgs = []
 
         if visualize:
@@ -297,7 +202,7 @@ class Object:
 
             # 2nd Plot showing the actual clusters formed
             colors = cm.nipy_spectral(clf.labels_.astype(float) / (i + 1))
-            ax2.scatter(X["x"], X["y"], marker='.', s=250, lw=0, alpha=0.7,
+            ax2.scatter(X[self.x_name], X[self.y_name], marker='.', s=250, lw=0, alpha=0.7,
                         c=colors, edgecolor='k')
 
             # Labeling the clusters
@@ -319,12 +224,12 @@ class Object:
     def plot_gmm(self, label=True, ax=None, plot_in_other=False, edgecolor=(0, 0, 0)):
         ax = ax or plt.gca()
         gmm = self.clf
-        X = self.raw_data[["x", "y"]]
+        X = self.raw_data[[self.x_name, self.y_name]]
         labels = gmm.fit(X).predict(X)
         if label:
-            ax.scatter(X["x"], X["y"], c=labels, s=40, cmap='viridis', zorder=2)
+            ax.scatter(X[self.x_name], X[self.y_name], c=labels, s=40, cmap='viridis', zorder=2)
         else:
-            ax.scatter(X["x"], X["y"], s=40, zorder=2)
+            ax.scatter(X[self.x_name], X[self.y_name], s=40, zorder=2)
 
         w_factor = 0.8 / gmm.weights_.max()
         for pos, covar, w in zip(gmm.means_, gmm.covariances_, gmm.weights_):

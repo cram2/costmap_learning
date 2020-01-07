@@ -1,6 +1,6 @@
 import numpy as np
 
-from object import Object
+from item import VRItem
 
 
 class Settings:
@@ -31,7 +31,7 @@ class Settings:
                     break
             # Create new Object for given object
             data_for_object = context_data.loc[context_data["object-type"] == str(object)]
-            new_object = Object(str(object), self.table_id, context_name, data_for_object)
+            new_object = VRItem(str(object), self.table_id, context_name, data_for_object)
             if new_object:
                 if old_object_existed_p:
                     objects[i] = new_object
