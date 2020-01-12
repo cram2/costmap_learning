@@ -36,10 +36,12 @@ class Kitchen:
                 #object_id).object_storage[0][0] <- bull, since only
                 #destinations are saved
 
-    def get_costmap(self, table_id, context_name, human_name, object_id):
+    def get_costmap(self, table_id, context_name, human_name, object_id,
+                    x_base_object_position, y_base_object_position):
         for human in self.humans:
             if human.name == human_name:
-                output_matrix = human.get_object_matrix(table_id, context_name, object_id)
+                output_matrix = human.get_object_matrix(table_id, context_name, object_id,
+                                                        x_base_object_position, y_base_object_position)
                 print("Returning costmaps")
                 return output_matrix.get_ros_costmap_response()
 

@@ -43,10 +43,11 @@ class Human:
                 if costmap.object_id == object_id:
                     return costmap
 
-    def get_object_matrix(self, table_name, context_name, object_id):
+    def get_object_matrix(self, table_name, context_name, object_id,
+                          x_base_object_position, y_base_object_position):
         tmp = self.get_object(table_name, context_name, object_id)
         if tmp:
-            return tmp.output_matrix
+            return tmp.get_output_matrix( x_base_object_position, y_base_object_position)
 
     #    def add_kitchen(self, kitchen):
     #        for table in kitchen.settings_by_table.values():

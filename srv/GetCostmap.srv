@@ -1,4 +1,6 @@
 string object_type # type of the object one wants the costmap for
+float32 x_base_object_position # the x position of one of the base objects
+float32 y_base_object_position # the y position of one of the base objects
 string context # describing the task proceeded during the vr data collection
 string name # name of the human who recorded the vr data
 string kitchen # name of the kitchen

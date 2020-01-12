@@ -46,7 +46,7 @@ def get_symbolic_location(req):
     table_id = str(req.table_id)
     if storage_p:
         # If only the storage of the object is necessary
-        return kitchens[kitchen_name].get_object_location(object_id)
+        return kitchens[kitchen_name].get_object_location(object_id) # TODO: Maybe loc depends from human_name or other params too?
     else:
         # Else: Get the location of the object for the context, human_name, kitchen
         return kitchens[kitchen_name].get_object_destination(object_id, context, human_name, table_id)
@@ -60,6 +60,8 @@ def get_costmap(req):
         logwarn("%s is no known object_type", req.object_type)
         return
     print(object_id)
+    x_base_object_position = req.x_base_object_position
+    y_base_object_position = req.y_base_object_position
     context_name = req.context
     print(context_name)
     human_name = req.name
@@ -69,7 +71,8 @@ def get_costmap(req):
     table_id = req.table_id
     print(table_id)
     if True:# k and table_id in k.table_ids:
-        return kitchens[kitchen_name].get_costmap(table_id, context_name, human_name, object_id)
+        return kitchens[kitchen_name].get_costmap(table_id, context_name, human_name, object_id,
+                                                  x_base_object_position, y_base_object_position)
 
 
 def vis_learned_data(with_relation=True):
@@ -79,21 +82,21 @@ def vis_learned_data(with_relation=True):
         for costmap in costmaps:
             cpy = list(map(lambda object: object.dest_costmap, costmaps[:]))
             del cpy[i]
-            # costmap.plot_gmm()
-            # for i in range(0, costmap.clf.n_components):
-            # costmap.costmap_to_output_matrices()[i].plot(
-            #    costmap.object_id + " component " + str(i))
-            # for relation_name, relation in costmap.related_costmaps.items():
-            #    relation.plot_gmm(Test=True)
-            #    relation.costmap_to_output_matrices()[0].plot(relation.object_id)
+            # costmap.dest_costmap.plot_gmm()
+            # for i in range(0, costmap.dest_costmap.clf.n_components):
+            #    costmap.costmap_to_output_matrices()[i].plot(costmap.dest_costmap.object_id + " component " + str(i))
             if with_relation:  # with_relation:
                 costmap.add_related_costmaps(cpy)
-                costmap.dest_costmap.plot_gmm(plot_in_other=True)
-                costmap.merge_related_into_matrix().plot(costmap.object_id + " with related")
-            costmap.dest_costmap.plot_gmm(plot_in_other=True)
-            costmap.dest_costmap.output_matrix.plot("Destination of " + costmap.object_id)
-            costmap.storage_costmap.plot_gmm(plot_in_other=True)
-            costmap.storage_costmap.output_matrix.plot("Storage of " + costmap.object_id)
+                # costmap.dest_costmap.plot_gmm()
+                # costmap.merge_related_into_matrix().plot(costmap.object_id + " with related")
+            # for relation_name, relation in costmap.related_costmaps.items():
+                # relation.plot_gmm()
+                # relation.costmap_to_output_matrices()[0].plot(relation.object_id)
+            # costmap.dest_costmap.plot_gmm(plot_in_other=True)
+            # costmap.dest_costmap.output_matrix.plot("Destination of " + costmap.object_id)
+            # costmap.dest_costmap.output_matrix.plot("Destination of " + costmap.object_id)
+            # costmap.storage_costmap.plot_gmm(plot_in_other=True)
+            # costmap.storage_costmap.output_matrix.plot("Storage of " + costmap.object_id)
             # for k, cr in costmap.related_costmaps.items():
             # print(k)
             # print(cr)

@@ -9,6 +9,7 @@ import numpy as np
 from scipy import linalg, ndimage
 from scipy.stats import multivariate_normal
 import pandas as pd
+from rospy import loginfo
 from sklearn.exceptions import NotFittedError
 
 from sklearn.mixture import GaussianMixture
@@ -20,6 +21,7 @@ from sklearn.model_selection import train_test_split
 
 from matrix import OutputMatrix
 from costmap import Costmap
+from random import randrange
 
 
 class VRItem:
@@ -27,10 +29,12 @@ class VRItem:
     def __init__(self, object_id, table_id, context, data, random_state=42,
                  minimum_sample_size=10):
         self.storage_costmap = Costmap(object_id, table_id, context, data, random_state=random_state,
-                                    x_name="from-x", y_name="from-y", minimum_sample_size=minimum_sample_size,
+                                    x_name="from-x", y_name="from-y", orient_name="from-orient",
+                                    minimum_sample_size=minimum_sample_size,
                                     optimal_n_components=1)
         self.dest_costmap = Costmap(object_id, table_id, context, data, random_state=random_state,
-                                    x_name="to-x", y_name="to-y", minimum_sample_size=minimum_sample_size)
+                                    x_name="to-x", y_name="to-y", orient_name="to-orient",
+                                    minimum_sample_size=minimum_sample_size)
         try:
             self.context = str(context)
             self.object_id = str(object_id)
@@ -45,6 +49,22 @@ class VRItem:
         self.object_storage = []  # lists of tuples [('storage_name', number)]
         self.add_object_storage(data)  # saves storage information in self.object_storage
         self.related_costmaps = {}
+        print("Created Item " + self.object_id + ".")
+
+    def get_output_matrix(self, x_base_object_position, y_base_object_position):
+        # If one of the given float64 has its max values
+        if x_base_object_position == np.finfo(np.float32).max or \
+                y_base_object_position == np.finfo(np.float32).max:
+            return self.dest_costmap.output_matrices[randrange(self.dest_costmap.clf.n_components)]
+        else :
+            base_object_name = "BowlLarge"
+            related_to_base_object = []
+            sample = [[x_base_object_position, y_base_object_position]]
+            for related_costmap in self.related_costmaps.values():
+                if "<->" + base_object_name in related_costmap.object_id:
+                    related_to_base_object.append([related_costmap, related_costmap.clf.predict_proba(sample)[0][1]])
+            prob_relation_costmap = sorted(related_to_base_object, key=lambda c_and_p: c_and_p[1], reverse=True)[0][0]
+            return prob_relation_costmap.output_matrices[0]
 
     def get_object_storage(self):
         if self.object_storage:
@@ -105,9 +125,10 @@ class VRItem:
                                 self.object_id + str(i) + relation_seperation + costmap.object_id + str(j),
                                 self.table_id, self.context, merged_data,
                                 random_state=random_state, optimal_n_components=2,
-                                x_name=self.dest_costmap.x_name, y_name=self.dest_costmap.y_name)
-                            print("created relation ", self.object_id + str(i) + relation_seperation
-                                  + costmap.object_id + str(j))
+                                x_name=self.dest_costmap.x_name, y_name=self.dest_costmap.y_name,
+                                orient_name=self.dest_costmap.orient_name)
+                            print("Created relation ", self.object_id + str(i) + relation_seperation
+                                  + costmap.object_id + str(j) + ".")
 
     def nearest_components(self, costmap):
         res = []
