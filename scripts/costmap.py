@@ -24,7 +24,7 @@ from matrix import OutputMatrix
 class Costmap:
 
     def __init__(self, object_id, table_id, context, data, random_state=42,
-                 x_name="x", y_name="y", minimum_sample_size=10, optimal_n_components=None):
+                 x_name="x", y_name="y", orient_name="", minimum_sample_size=10, optimal_n_components=None):
         try:
             self.resolution = 0.01
             self.context = str(context)
@@ -32,6 +32,7 @@ class Costmap:
             self.table_id = str(table_id)
             self.x_name = x_name
             self.y_name = y_name
+            self.orient_name = orient_name
         except ValueError:
             print("object_id, table_id and context should be possible to be strings")
             return
@@ -44,15 +45,38 @@ class Costmap:
         # X_train, X_test = train_test_split(data[[self.x_name, self.y_name]], test_size=.1)
         self.clf = GaussianMixture(n_components=optimal_n_components, random_state=random_state,
                                    init_params="kmeans").fit(data[[self.x_name, self.y_name]])
+        self.angles_clfs = []
+        self.angles_clfs = self.init_angles_clfs(random_state=random_state)
         # kernel = 1.0 * RBF([1.0]) # check if RBF([1.0]) or RBF([1.0, 1.0]) with
         # https://scikit-learn.org/stable/auto_examples/gaussian_process/plot_gpc.html#sphx-glr-auto-examples-gaussian-process-plot-gpc-py
         # y = self.clf.predict(X_train) # TODO REPLACE y WITH REAL y!
         # y_pred = self.clf.predict(X_test)
         # self.output_clf = GaussianProcessClassifier(kernel=kernel).fit(X_train, y)
-        self.output_matrix = self.costmap_to_output_matrix()
+        self.output_matrices = self.costmap_to_output_matrices()
         # self.plot_gmm(self.clf, data[[self.x_name, self.y_name]])
         # clf = BayesianGaussianMixture(n_components=5, random_state=random_state).fit(data[[self.x_name, self.y_name]])
         # self.plot_gmm(clf, data[[self.x_name, self.y_name]])
+
+    def init_angles_clfs(self, random_state=42):
+        angles_by_components = self.sort_angles_to_components()
+        ret = [[] for i in range(self.clf.n_components)]
+        for i in range(0, self.clf.n_components):
+            if len(angles_by_components[i]) == 1:
+                ret[i] = angles_by_components[i]
+            else:
+                ret[i] = GaussianMixture(n_components=1, random_state=random_state,
+                                         init_params="kmeans").fit(np.array(angles_by_components[i]).reshape(-1, 1))
+        return ret
+
+    def sort_angles_to_components(self):
+        angles = self.raw_data[self.orient_name]
+        coords = self.raw_data[[self.x_name, self.y_name]]
+        component_labels = self.clf.predict(coords)
+        ret = [[] for i in range(self.clf.n_components)]
+        for angle, component_label in zip(angles, component_labels):
+            ret[component_label].append(angle)
+        return ret
+
 
     def get_boundries(self, n_samples=100, component_i=0, std=7.0):
         """:return the smallest x0 and y0 value in the GMM and the width and height of given component in GMM"""
