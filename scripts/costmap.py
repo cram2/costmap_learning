@@ -20,6 +20,10 @@ from sklearn.model_selection import train_test_split
 
 from matrix import OutputMatrix
 
+from pathlib import Path
+from diskcache import Cache
+
+CACHE = Cache(str(Path.home()) + "/.cache/costmap_learning")
 
 class Costmap:
 
@@ -52,6 +56,7 @@ class Costmap:
         # y = self.clf.predict(X_train) # TODO REPLACE y WITH REAL y!
         # y_pred = self.clf.predict(X_test)
         # self.output_clf = GaussianProcessClassifier(kernel=kernel).fit(X_train, y)
+        self.cache = CACHE
         self.output_matrices = self.costmap_to_output_matrices()
         # self.plot_gmm(self.clf, data[[self.x_name, self.y_name]])
         # clf = BayesianGaussianMixture(n_components=5, random_state=random_state).fit(data[[self.x_name, self.y_name]])
@@ -291,6 +296,10 @@ class Costmap:
 
     def costmap_to_output_matrices(self, with_closest=True):
         output_matrices = []
+        with Cache(self.cache.directory) as reference:
+            cached_output_matrices = reference.get(self.object_id)
+            if cached_output_matrices is not None:
+                return cached_output_matrices
 
         for i in range(0, self.clf.n_components):
             empty_output_matrix, angle = self.get_boundries(component_i=i)
@@ -328,6 +337,8 @@ class Costmap:
             output_matrix = empty_output_matrix.copy()
             output_matrix.insert(res)
             output_matrices.append(output_matrix)
+        with Cache(self.cache.directory) as reference:
+            reference.set(self.object_id, output_matrices)
         return output_matrices
 
     def costmap_to_output_matrix(self):
