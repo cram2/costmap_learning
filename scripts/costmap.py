@@ -23,7 +23,9 @@ from matrix import OutputMatrix
 from pathlib import Path
 from diskcache import Cache
 
-CACHE = Cache(str(Path.home()) + "/.cache/costmap_learning")
+
+CACHE = Cache(str(Path.home()) + "/.cache/costmap_learning") # TODO: DOES NOT SUPPORT DIFFERENT HUMANS, CONTEXTS OR KITCHENS YET
+# TODO: To fix above maybe add reference object to kitchen and add ids of above in one big id together with the current db-id
 
 class Costmap:
 
@@ -295,12 +297,18 @@ class Costmap:
                                  180. + angle, **kwargs))
 
     def costmap_to_output_matrices(self, with_closest=True):
-        output_matrices = []
         with Cache(self.cache.directory) as reference:
-            cached_output_matrices = reference.get(self.object_id)
-            if cached_output_matrices is not None:
+            cached_output_matrices = []
+            for i in range(0, self.clf.n_components):
+                cached_output_matrix = reference.get(self.object_id + str(i))
+                if cached_output_matrix is not None:
+                    cached_output_matrices.append(cached_output_matrix)
+            if cached_output_matrices and len(cached_output_matrices) == self.clf.n_components:
+                print("Loaded Cache for " + self.object_id)
                 return cached_output_matrices
 
+        print("No cache found for " + self.object_id + ". Creating one.")
+        output_matrices = []
         for i in range(0, self.clf.n_components):
             empty_output_matrix, angle = self.get_boundries(component_i=i)
             width = empty_output_matrix.width
@@ -336,9 +344,9 @@ class Costmap:
             res /= res.max()
             output_matrix = empty_output_matrix.copy()
             output_matrix.insert(res)
+            with Cache(self.cache.directory) as reference:
+                reference.set(self.object_id + str(i), output_matrix)
             output_matrices.append(output_matrix)
-        with Cache(self.cache.directory) as reference:
-            reference.set(self.object_id, output_matrices)
         return output_matrices
 
     def costmap_to_output_matrix(self):
