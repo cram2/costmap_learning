@@ -24,6 +24,7 @@ cram_obj_t_to_vr_obj_t_dict = {
     } ## TODO: muss mit einer reasoning-fun in die reasoning.py
 
 
+
 def fit_data(full_path="/home/thomas/nameisthiscsvname_short.csv",
              kitchen_feature="kitchen_name", human_feature="human_name"):
     vr_data = pd.read_csv(full_path, na_values="NIL").dropna()
@@ -75,7 +76,7 @@ def get_costmap(req):
                                                   x_base_object_position, y_base_object_position)
 
 
-def vis_learned_data(with_relation=True):
+def generate_relations_between_items(visualize=False):
     for kitchen in kitchens.values():
         costmaps = kitchen.humans[0].settings_by_table["rectangular_table"].contexts["TABLE-SETTING"]
         i = 0
@@ -85,24 +86,22 @@ def vis_learned_data(with_relation=True):
             # costmap.dest_costmap.plot_gmm()
             # for i in range(0, costmap.dest_costmap.clf.n_components):
             #    costmap.costmap_to_output_matrices()[i].plot(costmap.dest_costmap.object_id + " component " + str(i))
-            if with_relation:  # with_relation:
-                costmap.add_related_costmaps(cpy)
-                # costmap.dest_costmap.plot_gmm()
-                # costmap.merge_related_into_matrix().plot(costmap.object_id + " with related")
-            # for relation_name, relation in costmap.related_costmaps.items():
-                # relation.plot_gmm()
-                # relation.costmap_to_output_matrices()[0].plot(relation.object_id)
+            if visualize:
+                costmap.dest_costmap.plot_gmm(plot_in_other=True)
+                costmap.dest_costmap.costmap_to_output_matrix().plot("Destination of " + costmap.object_id)
+                costmap.storage_costmap.plot_gmm(plot_in_other=True)
+                costmap.storage_costmap.output_matrices[0].plot("Storage of " + costmap.object_id)
+            costmap.add_related_costmaps(cpy)
+            # Merge relation costmaps and the standard destination costmap
             # costmap.dest_costmap.plot_gmm(plot_in_other=True)
-            # costmap.dest_costmap.output_matrix.plot("Destination of " + costmap.object_id)
-            # costmap.dest_costmap.output_matrix.plot("Destination of " + costmap.object_id)
-            # costmap.storage_costmap.plot_gmm(plot_in_other=True)
-            # costmap.storage_costmap.output_matrix.plot("Storage of " + costmap.object_id)
-            # for k, cr in costmap.related_costmaps.items():
-            # print(k)
-            # print(cr)
-            # cr.plot_gmm()
+            # costmap.merge_related_into_matrix().plot(costmap.object_id + " with related")
+            # plot relation
+            if visualize:
+                for relation_name, relation in costmap.related_costmaps.items():
+                    relation.plot_gmm(plot_in_other=True)
+                    relation.costmap_to_output_matrix().plot(relation.object_id)
             i += 1
 
 def init_dataset():
     fit_data()
-    vis_learned_data()
+    generate_relations_between_items()
