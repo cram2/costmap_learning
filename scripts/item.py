@@ -1,28 +1,15 @@
-import math
 
-import matplotlib.pyplot as plt
-import matplotlib.cm as cm
-from matplotlib.patches import Ellipse
-from mpl_toolkits.mplot3d import Axes3D
 
 import numpy as np
-from scipy import linalg, ndimage
-from scipy.stats import multivariate_normal
 import pandas as pd
+
+from random import randrange
 from rospy import loginfo
-from sklearn.exceptions import NotFittedError
 
 from sklearn.mixture import GaussianMixture
-from sklearn.gaussian_process import GaussianProcessClassifier
-from sklearn.gaussian_process.kernels import RBF
-from sklearn.cluster import KMeans
-from sklearn.metrics import silhouette_samples, silhouette_score, accuracy_score
-from sklearn.model_selection import train_test_split
 
 from matrix import OutputMatrix
 from costmap import Costmap
-from random import randrange
-
 
 class VRItem:
 
