@@ -1,6 +1,7 @@
 string object_type # type of the object one wants the costmap for
-float32 x_base_object_position # the x position of one of the base objects
-float32 y_base_object_position # the y position of one of the base objects
+float64[] placed_x_object_positions # the x position of the base objects
+float64[] placed_y_object_positions # the y position of the base objects
+string[] placed_object_types # types of the placed objects
 string context # describing the task proceeded during the vr data collection
 string name # name of the human who recorded the vr data
 string kitchen # name of the kitchen
@@ -12,4 +13,4 @@ float64 resolution # resolution of x_y_points in [m]
 float64 width # width of x_y_points in [m]
 float64 height # height of x_y_points in [m]
 float64[] x_y_vecs # 1d-array of vecs corresponding to the height filled with values from [0, 1]
-float64[] angles # angles for every slot in x_y_points
+float64[] angles # contains pairs of means and covs repeatably
