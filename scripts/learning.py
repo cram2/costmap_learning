@@ -21,9 +21,7 @@ cram_obj_t_to_vr_obj_t_dict = {
                          "KoellnMuesliCranberry"],
     "MILK": ["BaerenMarkeFrischeAlpenmilch38"],
     "BOTTLE": ["HohesCOrange"]
-    } ## TODO: muss mit einer reasoning-fun in die reasoning.py
-
-
+}  ## TODO: muss mit einer reasoning-fun in die reasoning.py
 
 def fit_data(full_path="/home/thomas/nameisthiscsvname_short.csv",
              kitchen_feature="kitchen_name", human_feature="human_name"):
@@ -33,6 +31,7 @@ def fit_data(full_path="/home/thomas/nameisthiscsvname_short.csv",
         kitchens[kitchen_name].fit_data(full_path=full_path,
                                         kitchen_feature=kitchen_feature,
                                         human_feature=human_feature)
+
 
 def get_symbolic_location(req):
     storage_p = req.storage
@@ -47,7 +46,8 @@ def get_symbolic_location(req):
     table_id = str(req.table_id)
     if storage_p:
         # If only the storage of the object is necessary
-        return kitchens[kitchen_name].get_object_location(object_id) # TODO: Maybe loc depends from human_name or other params too?
+        return kitchens[kitchen_name].get_object_location(
+            object_id)  # TODO: Maybe loc depends from human_name or other params too?
     else:
         # Else: Get the location of the object for the context, human_name, kitchen
         return kitchens[kitchen_name].get_object_destination(object_id, context, human_name, table_id)
@@ -61,8 +61,14 @@ def get_costmap(req):
         logwarn("%s is no known object_type", req.object_type)
         return
     print(object_id)
-    x_base_object_position = req.x_base_object_position
-    y_base_object_position = req.y_base_object_position
+    x_object_positions = req.placed_x_object_positions
+    y_object_positions = req.placed_y_object_positions
+    placed_object_types = req.placed_object_types
+    for i in range(0, len(placed_object_types)):
+        placed_object_types[i] = cram_obj_t_to_vr_obj_t_dict[placed_object_types[i]][0]
+    if (len(x_object_positions) != len(y_object_positions)):
+        raise Exception("x_base_object_positions and y_base_object_positions does not have the same length.")
+        return
     context_name = req.context
     print(context_name)
     human_name = req.name
@@ -71,9 +77,9 @@ def get_costmap(req):
     print(kitchen_name)
     table_id = req.table_id
     print(table_id)
-    if True:# k and table_id in k.table_ids:
+    if True:  # k and table_id in k.table_ids:
         return kitchens[kitchen_name].get_costmap(table_id, context_name, human_name, object_id,
-                                                  x_base_object_position, y_base_object_position)
+                                                  x_object_positions, y_object_positions, placed_object_types)
 
 
 def generate_relations_between_items(visualize=False):
@@ -101,6 +107,7 @@ def generate_relations_between_items(visualize=False):
                     relation.plot_gmm(plot_in_other=True)
                     relation.costmap_to_output_matrix().plot(relation.object_id)
             i += 1
+
 
 def init_dataset():
     fit_data()
