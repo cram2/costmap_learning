@@ -1,6 +1,8 @@
 import numpy as np
+from random import randrange
 
 from settings import Settings
+from costmap import Costmap
 
 
 class Human:
@@ -36,6 +38,11 @@ class Human:
         return tmp[0]
 
     def get_object(self, table_name, context_name, object_id):
+        """:return VRItem object of given table_name, context_name, object_id
+            :argument table_name name of the table
+            :argument context_name name of the context
+            :argument object_id the type of the object used as identifier for VRItem's
+        """
         table_name_and_setting = self.settings_by_table[table_name]
         if table_name_and_setting:
             context = table_name_and_setting.contexts[context_name]
@@ -43,11 +50,85 @@ class Human:
                 if costmap.object_id == object_id:
                     return costmap
 
-    def get_object_matrix(self, table_name, context_name, object_id,
-                          x_base_object_position, y_base_object_position):
+    def get_costmap(self, table_name, context_name, object_id, x_object_positions, y_object_positions, placed_object_types):
+        """:return GetCostmap-Response
+        
+        This function gets the table_name, context_name and object_id which are together a identifier for the desired 
+        GetCostmap-Response. Object_id encodes the type of wanted costmap. With the information of already placed object
+        positions encoded in x_object_positions and y_object_positions and the corresponding types in placed_object_types,
+        the costmap will be calculated as following:
+        First it will be checked if the placed object are all of the same type and if the object_id has the same type. 
+        If this is true a cut Costmap of the object type will be returned. If this is false we probably need to return 
+        a Costmap which has to consider the poses of different objects. At the beginning we choose a base_object_type
+        which is only declared because of technical calculation reasons. Typically any object can be a base_object_type.
+        After choosing a base_object_type we get the corresponding VRItem object. Moreover, we get the VRItem objects of 
+        the placed_object_types too. With that we can now try to get relational_costmaps. If does not work for the first 
+        base_object_type, we try another. If no base_object_type returns relational costmaps, we return a cut costmap 
+        of the object type object_id.
+        """
         tmp = self.get_object(table_name, context_name, object_id)
         if tmp:
-            return tmp.get_output_matrix( x_base_object_position, y_base_object_position)
+            # If all placed objects have the same type as the one to place (= object_id), just return its cut costmap
+            # with information of already placed objects in x_object_positions and y_object_positions
+            if all(obj_type == object_id for obj_type in placed_object_types):
+                costmaps = tmp.get_costmap_for_object_type(x_object_positions, y_object_positions)
+                return costmaps
+            else:
+                # Else there are different object types, which does not mean needing of a "relational costmap"
+
+                # Choose base object for future comparisons between costmaps
+                if "BowlLarge" in placed_object_types:
+                    base_object_type = "BowlLarge"
+                elif "SpoonSoup" in placed_object_types:
+                    base_object_type = "SpoonSoup"
+                else:
+                    base_object_type = placed_object_types[randrange(0, len(placed_object_types))]
+
+                # Get the VRItem of base_object_type
+                base_object = self.get_object(table_name, context_name, base_object_type)
+
+                # Get VRItem's of already placed objects
+                costmaps_to_placed_object_types = []
+                for object_type in placed_object_types:
+                    object = self.get_object(table_name, context_name, object_type)
+                    if object not in costmaps_to_placed_object_types:
+                        costmaps_to_placed_object_types.append(object)
+
+                # Get VRItems for object that should be placed
+                object_id_item = self.get_object(table_name, context_name, object_id)
+
+                # Get relational costmaps wrapped in the GetCostmap-Response from the base object w.r.t. the placed objects
+                relation_costmaps = base_object.get_relations_from_base_object(x_object_positions, y_object_positions,
+                                                                               placed_object_types,
+                                                                               costmaps_to_placed_object_types,
+                                                                               object_id_item)
+                # If there are no free places for object_id_item the base_object will be changed
+                if not relation_costmaps:
+                    object_types = list(set(placed_object_types[:]))
+                    object_types.remove(object_id) # reflexive relational costmaps do not exist
+                    while object_types and not relation_costmaps:
+                        object_type = object_types[randrange(0, len(object_types))]
+                        object_types.remove(object_type)
+                        new_base_object = self.get_object(table_name, context_name, object_type)
+                        relation_costmaps = new_base_object.get_relations_from_base_object(x_object_positions,
+                                                                                           y_object_positions,
+                                                                                           placed_object_types,
+                                                                                           costmaps_to_placed_object_types,
+                                                                                           object_id_item)
+                    # If a Costmaps were found return them, else....
+                    if relation_costmaps:
+                        return relation_costmaps
+                    # ... return the cut costmaps of object type object_id
+                    else:
+                        xs = [x for type, x in zip(placed_object_types, x_object_positions) if
+                              type == object_id]
+                        ys = [y for type, y in zip(placed_object_types, y_object_positions) if
+                              type == object_id]
+                        return object_id_item.get_costmap_for_object_type(xs, ys)
+                else:
+                    # Return relational costmaps if base_object from the beginning was right
+                    return relation_costmaps
+
 
     #    def add_kitchen(self, kitchen):
     #        for table in kitchen.settings_by_table.values():

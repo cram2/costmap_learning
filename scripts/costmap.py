@@ -6,6 +6,7 @@ from matplotlib.patches import Ellipse
 from mpl_toolkits.mplot3d import Axes3D
 
 import numpy as np
+from random import randrange
 from scipy import linalg, ndimage
 from scipy.stats import multivariate_normal
 import pandas as pd
@@ -30,7 +31,7 @@ CACHE = Cache(str(Path.home()) + "/.cache/costmap_learning") # TODO: DOES NOT SU
 class Costmap:
 
     def __init__(self, object_id, table_id, context, data, random_state=42,
-                 x_name="x", y_name="y", orient_name="", minimum_sample_size=10, optimal_n_components=None):
+                 x_name="x", y_name="y", orient_name="", minimum_sample_size=10, optimal_n_components=None, clf=None):
         try:
             self.resolution = 0.01
             self.context = str(context)
@@ -49,8 +50,10 @@ class Costmap:
         if not optimal_n_components:
             optimal_n_components = self.get_component_amount(data, random_state=random_state)
         # X_train, X_test = train_test_split(data[[self.x_name, self.y_name]], test_size=.1)
-        self.clf = GaussianMixture(n_components=optimal_n_components, random_state=random_state,
-                                   init_params="kmeans").fit(data[[self.x_name, self.y_name]])
+        self.clf = clf.fit(data[[self.x_name, self.y_name]]) \
+            if clf \
+            else GaussianMixture(n_components=optimal_n_components, random_state=random_state,
+                                 init_params="kmeans").fit(data[[self.x_name, self.y_name]])
         self.angles_clfs = []
         self.angles_clfs = self.init_angles_clfs(random_state=random_state)
         # kernel = 1.0 * RBF([1.0]) # check if RBF([1.0]) or RBF([1.0, 1.0]) with
@@ -66,10 +69,12 @@ class Costmap:
 
     def init_angles_clfs(self, random_state=42):
         angles_by_components = self.sort_angles_to_components()
-        ret = [[] for i in range(self.clf.n_components)]
+        ret = [None for i in range(self.clf.n_components)]
         for i in range(0, self.clf.n_components):
             if len(angles_by_components[i]) == 1:
-                ret[i] = angles_by_components[i]
+                pseudo_data = [angles_by_components[i], angles_by_components[i]]
+                ret[i] = GaussianMixture(n_components=1, random_state=random_state,
+                                         init_params="kmeans").fit(np.array(pseudo_data).reshape(-1, 1))
             else:
                 ret[i] = GaussianMixture(n_components=1, random_state=random_state,
                                          init_params="kmeans").fit(np.array(angles_by_components[i]).reshape(-1, 1))
@@ -146,6 +151,47 @@ class Costmap:
         #     return float('inf')
         # return 2 * math.exp(-1 * ((((x - x_0) ** 2) / ( 2 * s_x)) + (((y - y_0) ** 2) / ( 2 * s_y))))
         # return p_in_component * self.clf.predict_proba([[x, y]])[0][component_i]
+
+    @staticmethod
+    def costmaps_to_ros_getcostmap_response(costmaps, relation_p, cs=None, object_id_costmap=None):
+        # Actually ros_getcostmap_response should contain more costmaps, but CRAM cannot handle it.
+        # moreover, the srv GetCostmap should then have lists of width, height, res and Point instead.
+        print(costmaps)
+        if relation_p: # if elems in costmaps are relation costmaps
+            component_i = 1
+            output_matrices = []
+            angles = []
+            for i in range(0, len(costmaps)):
+                relation_name = costmaps[i].object_id
+                object_id_label = int(relation_name[len(relation_name) - 1])
+                output_matrices.append(object_id_costmap.costmap_to_output_matrices()[object_id_label])
+            for relation in costmaps:
+                #tmp = relation.output_matrices[component_i]
+                #output_matrices.append(tmp)
+                mean = relation.angles_clfs[component_i].means_[0]
+                cov = relation.angles_clfs[component_i].covariances_[0]
+                angles.extend([mean, cov])
+            output_matrix = OutputMatrix.summarize(output_matrices)
+            ros_costmap_response = output_matrix.get_ros_costmap_response()
+            ros_costmap_response.angles = angles
+            return ros_costmap_response
+        else: # if costmap (!) in costmaps is no relation costmap
+            if len(costmaps) == 1:
+                costmap = costmaps[0]
+                output_matrix = []
+                if not cs:
+                    output_matrix = OutputMatrix.summarize(costmap.output_matrices)
+                else:
+                    output_matrix = OutputMatrix.summarize(np.array(costmap.output_matrices)[cs])
+                ros_costmap_response = output_matrix.get_ros_costmap_response()
+                angles = []
+                indices = range(0, len(costmap.output_matrices)) if not cs else cs
+                for i in indices:
+                    mean = costmap.angles_clfs[i].means_[0]
+                    cov = costmap.angles_clfs[i].covariances_[0]
+                    angles.extend([mean, cov])
+                ros_costmap_response.angles = angles
+                return ros_costmap_response
 
     def merge(self, other, self_component=0, o_component=0):
         output_matrix = self.costmap_to_output_matrices()[self_component]

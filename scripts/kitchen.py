@@ -37,11 +37,13 @@ class Kitchen:
                 #destinations are saved
 
     def get_costmap(self, table_id, context_name, human_name, object_id,
-                    x_base_object_position, y_base_object_position):
+                    x_object_positions, y_object_positions, placed_object_types):
         for human in self.humans:
             if human.name == human_name:
-                output_matrix = human.get_object_matrix(table_id, context_name, object_id,
-                                                        x_base_object_position, y_base_object_position)
+                costmap = human.get_costmap(table_id, context_name, object_id,
+                                            x_object_positions, y_object_positions, placed_object_types)
                 print("Returning costmaps")
-                return output_matrix.get_ros_costmap_response()
+                print("")
+                return costmap
+
 

@@ -38,20 +38,117 @@ class VRItem:
         self.related_costmaps = {}
         print("Created Item " + self.object_id + ".")
 
-    def get_output_matrix(self, x_base_object_position, y_base_object_position):
-        # If one of the given float64 has its max values
-        if x_base_object_position == np.finfo(np.float32).max or \
-                y_base_object_position == np.finfo(np.float32).max:
-            return self.dest_costmap.output_matrices[randrange(self.dest_costmap.clf.n_components)]
-        else :
-            base_object_name = "BowlLarge"
-            related_to_base_object = []
-            sample = [[x_base_object_position, y_base_object_position]]
-            for related_costmap in self.related_costmaps.values():
-                if "<->" + base_object_name in related_costmap.object_id:
-                    related_to_base_object.append([related_costmap, related_costmap.clf.predict_proba(sample)[0][1]])
-            prob_relation_costmap = sorted(related_to_base_object, key=lambda c_and_p: c_and_p[1], reverse=True)[0][0]
-            return prob_relation_costmap.output_matrices[0]
+    def get_angles(self, x, y):
+        component = self.dest_costmap.clf.predict([[x, y]])
+        clf = self.dest_costmap.angles_clfs[component]
+        if clf:
+            return clf.means_[0], clf.covariances_[0]
+
+    def get_relations_from_base_object(self, x_object_positions, y_object_positions,
+                                       placed_object_types, costmaps_to_placed_object_types,
+                                       object_id_item):
+        """:returns the relational costmaps wrapped in a GetCostmap-Response
+
+        First the relational costmaps which are on the given coordinates x_object_positions and y_object_positions
+        are checked. If the costmap is in relation with the given object_id_item it will be saved temporarily. After
+        checking all coordinates of the given base_object self, the other object types in placed_object_types and their
+        coordinates in x_object_positions and y_object_positions are inspected. To prevent returning costmaps in which
+        objects are already placed, the function removes all objects which are in relation in the temporarily saved base
+        object Costmaps. If there still costmaps left, these will be wrapped in a GetCostmap-Response ROS message.
+
+        """
+
+        base_object_name = self.object_id
+        object_id_costmap = object_id_item.dest_costmap
+        relation_object_name = object_id_costmap.object_id
+
+        # If object type for wanted costmap is not itself a base object we pass it,
+        # since reflexive relationals are not supported
+        if not base_object_name == relation_object_name:
+            relation_costmaps = []
+
+            # x, y with the name of base_object_name of the VRItem object self
+            x_base_object_positions = [x for type, x in zip(placed_object_types, x_object_positions) if
+                                       type == base_object_name]
+            y_base_object_positions = [y for type, y in zip(placed_object_types, y_object_positions) if
+                                       type == base_object_name]
+
+            # Calculate most probable relation costmaps for given base (!) object positions
+            for x, y in zip(x_base_object_positions, y_base_object_positions):
+                sample = [[x, y]]
+                related_to_base_object = []
+                component = self.dest_costmap.clf.predict(sample)[0]
+                for related_costmap in self.related_costmaps.values():
+                    if base_object_name + str(component) in related_costmap.object_id and \
+                            "<->" + relation_object_name in related_costmap.object_id:
+                        related_to_base_object.append([related_costmap, related_costmap.clf.predict_proba(sample)[0][0]])
+                prob_relation_costmap = sorted(related_to_base_object, key=lambda c_and_p: c_and_p[1], reverse=True)[0][0]
+                relation_costmaps.append(prob_relation_costmap)
+
+            ret_costmaps = relation_costmaps[:]
+            print(ret_costmaps)
+
+            # Coordinates and types of objects which are not of the type base_object_name
+            x_object_positions_and_type = [(x, type) for type, x in zip(placed_object_types, x_object_positions) if
+                                           not type == base_object_name]
+            y_object_positions_and_type = [(y, type) for type, y in zip(placed_object_types, y_object_positions) if
+                                           not type == base_object_name]
+
+            # Remove relation if object of type in placed_object_types on x,y is probably placed
+            for x_and_type, y_and_type in zip(x_object_positions_and_type, y_object_positions_and_type):
+                sample = [[x_and_type[0], y_and_type[0]]]
+                type = x_and_type[1] if x_and_type[1] == y_and_type[1] else None
+                if not type:
+                    raise Exception("Types are not equal")
+                for related_costmap in ret_costmaps:
+                    if "<->" + str(type) in related_costmap.object_id:
+                        #relation_label = related_costmap.clf.predict(sample)[0] <- the 2 gmm relation way
+                        #label = related_costmap.object_id[len(related_costmap.object_id) - 1]
+                        clf = next(i.dest_costmap.clf for i in costmaps_to_placed_object_types
+                                   if i.object_id == relation_object_name)
+                        relation_label = clf.predict(sample)[0]
+                        print(related_costmap.object_id)
+                        print("relation_label")
+                        print(relation_label)
+                        print("label")
+                        print(relation_label)
+                        #if relation_label == 0 and \ <- the 2 gmm relation way
+                        #        "<->" + str(type) + label in related_costmap.object_id and \
+                        #        related_costmap in ret_costmaps:
+                        if "<->" + str(type) + str(relation_label) in related_costmap.object_id and \
+                                related_costmap in ret_costmaps:
+                            print("removed:")
+                            print(related_costmap.object_id)
+                            ret_costmaps.remove(related_costmap)
+            print(ret_costmaps)
+            print("end")
+            if ret_costmaps:
+                return Costmap.costmaps_to_ros_getcostmap_response(ret_costmaps, True, object_id_costmap=object_id_costmap)
+
+    def get_costmap_for_object_type(self, x_base_object_positions, y_base_object_positions):
+        """:returns GetCostmap-Response
+
+        This function simply returns the wrapped costmap by previously removing components in which objects
+        with the coordinates from x_base_object_positions and y_base_object_positions probably are.
+        """
+        if not x_base_object_positions and not y_base_object_positions:
+            return Costmap.costmaps_to_ros_getcostmap_response([self.dest_costmap], False)
+        else:
+            samples = list(map(list, zip(x_base_object_positions, y_base_object_positions)))
+            components = [i for i in range(0, self.dest_costmap.clf.n_components)]
+            removed_labels = [] # if e.g. more objects of the same type are in one component
+            for label in self.dest_costmap.clf.predict(samples):
+                if label not in removed_labels:
+                    components.remove(label)
+                    removed_labels.append(label)
+
+
+            if components:
+                return Costmap.costmaps_to_ros_getcostmap_response([self.dest_costmap],
+                                                                   False,
+                                                                   cs=components)
+            else:
+                raise Exception("No costmaps left.")
 
     def get_object_storage(self):
         if self.object_storage:
@@ -113,7 +210,7 @@ class VRItem:
                                 self.table_id, self.context, merged_data,
                                 random_state=random_state, optimal_n_components=2,
                                 x_name=self.dest_costmap.x_name, y_name=self.dest_costmap.y_name,
-                                orient_name=self.dest_costmap.orient_name)
+                                orient_name=self.dest_costmap.orient_name, clf=gmm)
                             print("Created relation ", self.object_id + str(i) + relation_seperation
                                   + costmap.object_id + str(j) + ".")
 
