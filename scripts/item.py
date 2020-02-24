@@ -1,24 +1,21 @@
-
-
 import numpy as np
 import pandas as pd
 
-from random import randrange
-from rospy import loginfo
-
 from sklearn.mixture import GaussianMixture
+from rospy import loginfo
 
 from matrix import OutputMatrix
 from costmap import Costmap
+
 
 class VRItem:
 
     def __init__(self, object_id, table_id, context, data, random_state=42,
                  minimum_sample_size=10):
         self.storage_costmap = Costmap(object_id, table_id, context, data, random_state=random_state,
-                                    x_name="from-x", y_name="from-y", orient_name="from-orient",
-                                    minimum_sample_size=minimum_sample_size,
-                                    optimal_n_components=1)
+                                       x_name="from-x", y_name="from-y", orient_name="from-orient",
+                                       minimum_sample_size=minimum_sample_size,
+                                       optimal_n_components=1)
         self.dest_costmap = Costmap(object_id, table_id, context, data, random_state=random_state,
                                     x_name="to-x", y_name="to-y", orient_name="to-orient",
                                     minimum_sample_size=minimum_sample_size)
@@ -47,15 +44,26 @@ class VRItem:
     def get_relations_from_base_object(self, x_object_positions, y_object_positions,
                                        placed_object_types, costmaps_to_placed_object_types,
                                        object_id_item):
-        """:returns the relational costmaps wrapped in a GetCostmap-Response
+        """ Returns the relational costmaps for given parameters in a GetCostmapResponse object.
 
-        First the relational costmaps which are on the given coordinates x_object_positions and y_object_positions
-        are checked. If the costmap is in relation with the given object_id_item it will be saved temporarily. After
-        checking all coordinates of the given base_object self, the other object types in placed_object_types and their
-        coordinates in x_object_positions and y_object_positions are inspected. To prevent returning costmaps in which
-        objects are already placed, the function removes all objects which are in relation in the temporarily saved base
-        object Costmaps. If there still costmaps left, these will be wrapped in a GetCostmap-Response ROS message.
+        First the relational costmaps in self.related_costmaps will be spotted which are on the given coordinates
+        x_object_positions and y_object_positions. If the costmap is in relation with the given object_id_item,
+        it will be saved temporarily. After checking all coordinates with the given type self.object_id,
+        the other object types in placed_object_types and their coordinates in x_object_positions and y_object_positions
+        are inspected. To prevent returning costmaps in which objects are already placed on, the function removes
+        all relations between the already placed objects and self.
+        If there are still costmaps left, these will be wrapped in a GetCostmapResponse ROS message.
 
+        :param x_object_positions: contains double values of the x-coordinates from the objects in placed_object_types
+        :type x_object_positions: list
+        :param y_object_positions: contains double values of the y-coordinates from the objects in placed_object_types
+        :type y_object_positions: list
+        :param placed_object_types: represents the already placed objects with their object type which is encoded as str
+        :type placed_object_types: list
+        :param costmaps_to_placed_object_types: contains VRItem objects for corresponding types given in placed_object_types
+        :type costmaps_to_placed_object_types: list
+        :returns the relational costmaps wrapped in a GetCostmap-Response
+        :rtype: GetCostmapResponse
         """
 
         base_object_name = self.object_id
@@ -81,7 +89,8 @@ class VRItem:
                 for related_costmap in self.related_costmaps.values():
                     if base_object_name + str(component) in related_costmap.object_id and \
                             "<->" + relation_object_name in related_costmap.object_id:
-                        related_to_base_object.append([related_costmap, related_costmap.clf.predict_proba(sample)[0][0]])
+                        related_to_base_object.append(
+                            [related_costmap, related_costmap.clf.predict_proba(sample)[0][0]])
                 prob_relation_costmap = sorted(related_to_base_object, key=lambda c_and_p: c_and_p[1], reverse=True)[0][0]
                 relation_costmaps.append(prob_relation_costmap)
 
@@ -102,8 +111,8 @@ class VRItem:
                     raise Exception("Types are not equal")
                 for related_costmap in ret_costmaps:
                     if "<->" + str(type) in related_costmap.object_id:
-                        #relation_label = related_costmap.clf.predict(sample)[0] <- the 2 gmm relation way
-                        #label = related_costmap.object_id[len(related_costmap.object_id) - 1]
+                        # relation_label = related_costmap.clf.predict(sample)[0] # <- the 2 gmm relation way, and uncomment the 2 next lines
+                        # label = related_costmap.object_id[len(related_costmap.object_id) - 1] # <- the 2 gmm relation way
                         clf = next(i.dest_costmap.clf for i in costmaps_to_placed_object_types
                                    if i.object_id == relation_object_name)
                         relation_label = clf.predict(sample)[0]
@@ -112,7 +121,7 @@ class VRItem:
                         print(relation_label)
                         print("label")
                         print(relation_label)
-                        #if relation_label == 0 and \ <- the 2 gmm relation way
+                        # if relation_label == 0 and \ # <- the 2 gmm relation way <- the 2 gmm relation way and uncomment the next if head
                         #        "<->" + str(type) + label in related_costmap.object_id and \
                         #        related_costmap in ret_costmaps:
                         if "<->" + str(type) + str(relation_label) in related_costmap.object_id and \
@@ -123,30 +132,34 @@ class VRItem:
             print(ret_costmaps)
             print("end")
             if ret_costmaps:
-                return Costmap.costmaps_to_ros_getcostmap_response(ret_costmaps, True, object_id_costmap=object_id_costmap)
+                return object_id_costmap.costmap_to_ros_getcostmapresponse(relations=ret_costmaps)
 
-    def get_costmap_for_object_type(self, x_base_object_positions, y_base_object_positions):
-        """:returns GetCostmap-Response
+    def get_costmap_for_object_type(self, x_object_positions, y_object_positions):
+        """ Returns costmap dest_costmap, which is cut accordingly to the given parameters.
 
         This function simply returns the wrapped costmap by previously removing components in which objects
         with the coordinates from x_base_object_positions and y_base_object_positions probably are.
+
+        :param x_object_positions: contains double values of the x-coordinates from the objects in placed_object_types
+        :type x_object_positions: list
+        :param y_object_positions: contains double values of the y-coordinates from the objects in placed_object_types
+        :type y_object_positions: list
+        :returns: cut Costmap wrapped in a GetCostmapResponse
+        :rtype: GetCostmapResponse
         """
-        if not x_base_object_positions and not y_base_object_positions:
-            return Costmap.costmaps_to_ros_getcostmap_response([self.dest_costmap], False)
+        if not x_object_positions and not y_object_positions:
+            return self.dest_costmap.costmap_to_ros_getcostmapresponse()
         else:
-            samples = list(map(list, zip(x_base_object_positions, y_base_object_positions)))
+            samples = list(map(list, zip(x_object_positions, y_object_positions)))
             components = [i for i in range(0, self.dest_costmap.clf.n_components)]
-            removed_labels = [] # if e.g. more objects of the same type are in one component
+            removed_labels = []  # if e.g. more objects of the same type are in one component
             for label in self.dest_costmap.clf.predict(samples):
                 if label not in removed_labels:
                     components.remove(label)
                     removed_labels.append(label)
 
-
             if components:
-                return Costmap.costmaps_to_ros_getcostmap_response([self.dest_costmap],
-                                                                   False,
-                                                                   cs=components)
+                return self.dest_costmap.costmap_to_ros_getcostmapresponse(cs=components)
             else:
                 raise Exception("No costmaps left.")
 
@@ -192,8 +205,10 @@ class VRItem:
                             raw_data_xy = self.raw_data[[self.dest_costmap.x_name, self.dest_costmap.y_name]].copy()
                             other_raw_data_xy = costmap.raw_data[[costmap.x_name, costmap.y_name]].copy()
                             # Use only x, y data which are in the component i in self and j in given costmap
-                            raw_data_cpy = self.raw_data[self.dest_costmap.clf.predict(raw_data_xy.to_numpy()) == i].copy()
-                            other_raw_data_cpy = costmap.raw_data[costmap.clf.predict(other_raw_data_xy.to_numpy()) == j].copy()
+                            raw_data_cpy = self.raw_data[
+                                self.dest_costmap.clf.predict(raw_data_xy.to_numpy()) == i].copy()
+                            other_raw_data_cpy = costmap.raw_data[
+                                costmap.clf.predict(other_raw_data_xy.to_numpy()) == j].copy()
                             # Merge the filtered x and y data
                             merged_data = pd.DataFrame().append(raw_data_cpy).append(other_raw_data_cpy)
                             # Copy the means and cov from the component i in self and j in given costmap
@@ -239,7 +254,7 @@ class VRItem:
         if relations:
             for relation_name, relation in relations.items():
                 if relation.clf.n_components == 2:
-                    #relation.costmap_to_output_matrices()[0].plot(relation_name)
+                    # relation.costmap_to_output_matrices()[0].plot(relation_name)
                     output_matrix = relation.costmap_to_output_matrices()[0]
                     res.append(output_matrix)
                 else:

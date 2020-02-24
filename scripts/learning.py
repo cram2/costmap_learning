@@ -3,7 +3,6 @@ import numpy as np
 import pandas as pd
 from rospy import logwarn
 
-# from human import Human
 from kitchen import Kitchen
 from costmap import *
 from item import *

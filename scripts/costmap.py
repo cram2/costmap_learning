@@ -152,22 +152,33 @@ class Costmap:
         # return 2 * math.exp(-1 * ((((x - x_0) ** 2) / ( 2 * s_x)) + (((y - y_0) ** 2) / ( 2 * s_y))))
         # return p_in_component * self.clf.predict_proba([[x, y]])[0][component_i]
 
-    @staticmethod
-    def costmaps_to_ros_getcostmap_response(costmaps, relation_p, cs=None, object_id_costmap=None):
+    def costmap_to_ros_getcostmapresponse(self, relations=None, cs=None):
+        """Returns the given costmaps in a ROS GetCostmapResponse message.
+
+        If there are relations towards self, meaning relations is not empty, these will
+        be evaluated by returning only the components of the Costmap self which are in
+        relation with them. If relations is empty and no valid relation was found, the
+        components of the Costmap self will be returned accordingly to the given components
+        in cs.
+
+        :param relations: contains costmaps which are in relation towards self.object_id
+        :type relations: list
+        :key cs: Optional list of Integers containing indices of components of a GMM
+        :type cs: list
+        """
         # Actually ros_getcostmap_response should contain more costmaps, but CRAM cannot handle it.
         # moreover, the srv GetCostmap should then have lists of width, height, res and Point instead.
-        print(costmaps)
-        if relation_p: # if elems in costmaps are relation costmaps
+        if relations:
             component_i = 1
             output_matrices = []
             angles = []
-            for i in range(0, len(costmaps)):
-                relation_name = costmaps[i].object_id
+            for i in range(0, len(relations)):
+                relation_name = relations[i].object_id
                 object_id_label = int(relation_name[len(relation_name) - 1])
-                output_matrices.append(object_id_costmap.costmap_to_output_matrices()[object_id_label])
-            for relation in costmaps:
-                #tmp = relation.output_matrices[component_i]
-                #output_matrices.append(tmp)
+                output_matrices.append(self.output_matrices[object_id_label])
+            for relation in relations:
+                #tmp = relation.output_matrices[component_i] # <- the 2 gmm relation way
+                #output_matrices.append(tmp) # <- the 2 gmm relation way and uncomment above for loop
                 mean = relation.angles_clfs[component_i].means_[0]
                 cov = relation.angles_clfs[component_i].covariances_[0]
                 angles.extend([mean, cov])
@@ -175,23 +186,21 @@ class Costmap:
             ros_costmap_response = output_matrix.get_ros_costmap_response()
             ros_costmap_response.angles = angles
             return ros_costmap_response
-        else: # if costmap (!) in costmaps is no relation costmap
-            if len(costmaps) == 1:
-                costmap = costmaps[0]
-                output_matrix = []
-                if not cs:
-                    output_matrix = OutputMatrix.summarize(costmap.output_matrices)
-                else:
-                    output_matrix = OutputMatrix.summarize(np.array(costmap.output_matrices)[cs])
-                ros_costmap_response = output_matrix.get_ros_costmap_response()
-                angles = []
-                indices = range(0, len(costmap.output_matrices)) if not cs else cs
-                for i in indices:
-                    mean = costmap.angles_clfs[i].means_[0]
-                    cov = costmap.angles_clfs[i].covariances_[0]
-                    angles.extend([mean, cov])
-                ros_costmap_response.angles = angles
-                return ros_costmap_response
+        else:
+            output_matrix = []
+            if not cs:
+                output_matrix = OutputMatrix.summarize(self.output_matrices)
+            else:
+                output_matrix = OutputMatrix.summarize(np.array(self.output_matrices)[cs])
+            ros_costmap_response = output_matrix.get_ros_costmap_response()
+            angles = []
+            indices = range(0, len(self.output_matrices)) if not cs else cs
+            for i in indices:
+                mean = self.angles_clfs[i].means_[0]
+                cov = self.angles_clfs[i].covariances_[0]
+                angles.extend([mean, cov])
+            ros_costmap_response.angles = angles
+            return ros_costmap_response
 
     def merge(self, other, self_component=0, o_component=0):
         output_matrix = self.costmap_to_output_matrices()[self_component]

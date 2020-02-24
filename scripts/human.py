@@ -2,7 +2,6 @@ import numpy as np
 from random import randrange
 
 from settings import Settings
-from costmap import Costmap
 
 
 class Human:
@@ -38,10 +37,16 @@ class Human:
         return tmp[0]
 
     def get_object(self, table_name, context_name, object_id):
-        """:return VRItem object of given table_name, context_name, object_id
-            :argument table_name name of the table
-            :argument context_name name of the context
-            :argument object_id the type of the object used as identifier for VRItem's
+        """ Returns the VRItem object corresponding to the given parameters.
+
+            :param table_name: encoded name of the table
+            :type table_name: str
+            :param context_name: encoded name of the context
+            :type context_name: str
+            :param object_id: encoded type of the object used as identifier for VRItem objects
+            :type object_id: str
+            :returns: VRItem object for parameters
+            :rtype: VRItem
         """
         table_name_and_setting = self.settings_by_table[table_name]
         if table_name_and_setting:
@@ -51,20 +56,31 @@ class Human:
                     return costmap
 
     def get_costmap(self, table_name, context_name, object_id, x_object_positions, y_object_positions, placed_object_types):
-        """:return GetCostmap-Response
-        
-        This function gets the table_name, context_name and object_id which are together a identifier for the desired 
-        GetCostmap-Response. Object_id encodes the type of wanted costmap. With the information of already placed object
-        positions encoded in x_object_positions and y_object_positions and the corresponding types in placed_object_types,
-        the costmap will be calculated as following:
-        First it will be checked if the placed object are all of the same type and if the object_id has the same type. 
-        If this is true a cut Costmap of the object type will be returned. If this is false we probably need to return 
+        """ Returns the Costmap for the given arguments wrapped in a GetCostmapResponse object.
+
+        First the function checks, if the placed objects are all of the same type and if the object_id has the same type.
+        If this is true a cut Costmap of given object type will be returned. If this is false, we probably need to return
         a Costmap which has to consider the poses of different objects. At the beginning we choose a base_object_type
-        which is only declared because of technical calculation reasons. Typically any object can be a base_object_type.
-        After choosing a base_object_type we get the corresponding VRItem object. Moreover, we get the VRItem objects of 
-        the placed_object_types too. With that we can now try to get relational_costmaps. If does not work for the first 
-        base_object_type, we try another. If no base_object_type returns relational costmaps, we return a cut costmap 
+        which is only declared because of the given implementation in item.py. In general any object can be a base_object_type.
+        After choosing a base_object_type we get the corresponding VRItem object. Moreover, we get the VRItem objects of
+        the placed_object_types too. With that we can now try to get relational_costmaps. If this does not work for the first
+        base_object_type, we try another one. If every base_object_type returns no relational costmaps, we return a cut costmap
         of the object type object_id.
+
+        :param table_name: encoded name of the table
+        :type table_name: str
+        :param conext_name: encoded name of the context/setting
+        :type context_name: str
+        :param object_id: encoded type of the wanted costmap
+        :type object_id: str
+        :param x_object_positions: contains double values of the x-coordinates from the objects in placed_object_types
+        :type x_object_positions: list
+        :param y_object_positions: contains double values of the y-coordinates from the objects in placed_object_types
+        :type y_object_positions: list
+        :param placed_object_types: represents the already placed objects with their object type which is encoded as str
+        :type placed_object_types: list
+        :returns: the costmap for the given parameters
+        :rtype: GetCostmapResponse
         """
         tmp = self.get_object(table_name, context_name, object_id)
         if tmp:
@@ -97,7 +113,7 @@ class Human:
                 # Get VRItems for object that should be placed
                 object_id_item = self.get_object(table_name, context_name, object_id)
 
-                # Get relational costmaps wrapped in the GetCostmap-Response from the base object w.r.t. the placed objects
+                # Get relational costmaps wrapped in the GetCostmapResponse from the base object w.r.t. the placed objects
                 relation_costmaps = base_object.get_relations_from_base_object(x_object_positions, y_object_positions,
                                                                                placed_object_types,
                                                                                costmaps_to_placed_object_types,
