@@ -37,6 +37,4 @@ class Settings:
                     objects[i] = new_object
                 else:
                     self.contexts[context_name].append(new_object)
-            else:
-                print("Object with type ", str(object), " could not be created.")
 

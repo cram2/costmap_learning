@@ -19,6 +19,9 @@ class VRItem:
         self.dest_costmap = Costmap(object_id, table_id, context, data, random_state=random_state,
                                     x_name="to-x", y_name="to-y", orient_name="to-orient",
                                     minimum_sample_size=minimum_sample_size)
+        if not self.storage_costmap or not self.dest_costmap:
+            print("Object with type ", str(object_id), " could not be created.")
+            return
         try:
             self.context = str(context)
             self.object_id = str(object_id)

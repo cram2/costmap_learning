@@ -90,7 +90,7 @@ class Human:
                 costmaps = tmp.get_costmap_for_object_type(x_object_positions, y_object_positions)
                 return costmaps
             else:
-                # Else there are different object types, which does not mean needing of a "relational costmap"
+                # Else there are different object types, which does not have to mean needing of a "relational costmap"
 
                 # Choose base object for future comparisons between costmaps
                 if "BowlLarge" in placed_object_types:
@@ -131,7 +131,7 @@ class Human:
                                                                                            placed_object_types,
                                                                                            costmaps_to_placed_object_types,
                                                                                            object_id_item)
-                    # If a Costmaps were found return them, else....
+                    # If Costmaps were found return them, else....
                     if relation_costmaps:
                         return relation_costmaps
                     # ... return the cut costmaps of object type object_id
