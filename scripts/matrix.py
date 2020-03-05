@@ -60,19 +60,24 @@ class OutputMatrix(object):
                 return None
                 #raise ValueError("there was no intersected area merging the output matrix")
 
-    def get_ros_costmap_response(self):
+    @staticmethod
+    def get_ros_costmap_response(output_matrices=None):
         # matrix as a list of vectors which are in the matrix the
         # "rows"
         response = GetCostmapResponse()
-        response.bottem_left = Point(float(self.x), float(self.y), float(0.0))
-        response.z_coordinate = float(1.0)
-        response.resolution = float(self.resolution)
-        response.width = float(self.width)
-        response.height = float(self.height)
-        tmp = np.array(self.matrix).astype(np.float)
+        for output_matrix in output_matrices:
+            print(output_matrix)
+            response.bottem_lefts.append(Point(float(output_matrix.x), float(output_matrix.y), float(0.0)))
+            response.widths.append(float(output_matrix.width))
+            response.heights.append(float(output_matrix.height))
+        response.resolution = float(output_matrices[0].resolution)
+        output_matrix = OutputMatrix.summarize(output_matrices)
+        tmp = np.array(output_matrix.matrix).astype(np.float)
         response.x_y_vecs = list(tmp.flatten())
-        #print(response.x_y_vecs)
-        response.angles = [] # self.angles)
+        response.global_width = float(output_matrix.width)
+        response.global_height = float(output_matrix.height)
+        # print(response.x_y_vecs)
+        # response.angles = [] # self.angles)
         return response
 
     @staticmethod
