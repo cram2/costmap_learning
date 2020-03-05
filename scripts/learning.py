@@ -22,7 +22,7 @@ cram_obj_t_to_vr_obj_t_dict = {
     "BOTTLE": ["HohesCOrange"]
 }  ## TODO: muss mit einer reasoning-fun in die reasoning.py
 
-def fit_data(full_path="/home/thomas/nameisthiscsvname_short.csv",
+def fit_data(full_path="/home/thomas/nameisthiscsvname_with_euler_angles_smaller_then_pi_short.csv",
              kitchen_feature="kitchen_name", human_feature="human_name"):
     vr_data = pd.read_csv(full_path, na_values="NIL").dropna()
     for kitchen_name in np.unique(vr_data[kitchen_feature]):
