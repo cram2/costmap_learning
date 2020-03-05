@@ -7,10 +7,11 @@ string name # name of the human who recorded the vr data
 string kitchen # name of the kitchen
 string table_id # name of the table
 ---
-geometry_msgs/Point bottem_left # bottom left point of x_y_points in the map frame of kitchen
-float64 z_coordinate 
 float64 resolution # resolution of x_y_points in [m]
-float64 width # width of x_y_points in [m]
-float64 height # height of x_y_points in [m]
+geometry_msgs/Point[] bottem_lefts # bottom left point of x_y_points in the map frame of kitchen
+float64[] widths # width of x_y_points in [m]
+float64[] heights # height of x_y_points in [m]
 float64[] x_y_vecs # 1d-array of vecs corresponding to the height filled with values from [0, 1]
+float64 global_width
+float64 global_height
 float64[] angles # contains pairs of means and covs repeatably
