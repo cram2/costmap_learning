@@ -24,16 +24,16 @@ class Human:
     def get_object_storage(self, object_type):
         tmp = []
         for name_and_setting in self.settings_by_table.items():
-            print(name_and_setting)
+            #print(name_and_setting)
             for context_name_and_costmaps in name_and_setting[1].contexts.items():
-                print(context_name_and_costmaps)
+                #print(context_name_and_costmaps)
                 for costmap in context_name_and_costmaps[1]:
-                    print(object_type)
-                    print(costmap.object_id)
+                    #print(object_type)
+                    #print(costmap.object_id)
                     if costmap.object_id == str(object_type):
                         tmp.append(costmap.object_storage[0])
         tmp.sort(key=lambda t: t[1], reverse=True)
-        print(tmp)
+        #print(tmp[0])
         return tmp[0]
 
     def get_object(self, table_name, context_name, object_id):
@@ -58,14 +58,14 @@ class Human:
     def get_costmap(self, table_name, context_name, object_id, x_object_positions, y_object_positions, placed_object_types):
         """ Returns the Costmap for the given arguments wrapped in a GetCostmapResponse object.
 
-        First the function checks, if the placed objects are all of the same type and if the object_id has the same type.
-        If this is true a cut Costmap of given object type will be returned. If this is false, we probably need to return
-        a Costmap which has to consider the poses of different objects. At the beginning we choose a base_object_type
-        which is only declared because of the given implementation in item.py. In general any object can be a base_object_type.
-        After choosing a base_object_type we get the corresponding VRItem object. Moreover, we get the VRItem objects of
-        the placed_object_types too. With that we can now try to get relational_costmaps. If this does not work for the first
-        base_object_type, we try another one. If every base_object_type returns no relational costmaps, we return a cut costmap
-        of the object type object_id.
+        First the function checks, if the placed objects are all of the given type object_id. If this is true, a cut
+        Costmap of the given object type object_id will be returned. But if it is false, we probably need to return
+        a Costmap which has to consider the poses of different objects too.
+        At the beginning we choose a base_object_type which is only declared because of the given implementation in item.py.
+        In general any object can be a base_object_type. After choosing a base_object_type, we get the corresponding VRItem object.
+        Moreover, we get the VRItem objects of the placed_object_types too. With that we can now try to get relational_costmaps.
+        If we get no relational_costmaps, we try another base_object_type. If every base_object_type returns no relational
+        costmaps, we return a cut costmap of the object type object_id.
 
         :param table_name: encoded name of the table
         :type table_name: str
