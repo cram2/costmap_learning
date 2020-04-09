@@ -66,7 +66,7 @@ class OutputMatrix(object):
         # "rows"
         response = GetCostmapResponse()
         for output_matrix in output_matrices:
-            print(output_matrix)
+            # print(output_matrix)
             response.bottem_lefts.append(Point(float(output_matrix.x), float(output_matrix.y), float(0.0)))
             response.widths.append(float(output_matrix.width))
             response.heights.append(float(output_matrix.height))
@@ -172,8 +172,17 @@ class OutputMatrix(object):
                 r_to_y1 = abs(y1 - (other.y + other.height))
             return OutputMatrix(r_x0, r_y0, (x1 - r_to_x1) - r_x0, (y1 + r_to_y1) - r_y0)
 
-    def plot(self, text):
+    def plot(self, text, name=None):
         plt.title(text)
         plt.imshow(self.matrix, extent=[self.x, self.x + self.width, self.y, self.y + self.height], alpha=0.5)
         plt.colorbar()
-        plt.show()
+        # plots the table borders
+        plt.plot([-1.32, -0.515], [0.565, 0.565], 'k-', lw=2) # bottom right to top right
+        plt.plot([-0.515, -0.515], [0.565, 3.02], 'k-', lw=2) # top right to top left
+        plt.plot([-0.515, -1.32], [3.02, 3.02], 'k-', lw=2) # top left to bottom left
+        plt.plot([-1.32, -1.32], [3.02, 0.565], 'k-', lw=2) # bottom left to bottom right
+        if name:
+            plt.savefig(name, pad_inches=0.2, bbox_inches='tight')
+            plt.close()
+        else:
+            plt.show()
