@@ -3,9 +3,11 @@ import math
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
 from matplotlib.patches import Ellipse
+import matplotlib.lines as lines
 from mpl_toolkits.mplot3d import Axes3D
 
 import numpy as np
+from math import pi
 from random import randrange
 from scipy import linalg, ndimage
 from scipy.stats import multivariate_normal
@@ -19,6 +21,8 @@ from sklearn.cluster import KMeans
 from sklearn.metrics import silhouette_samples, silhouette_score, accuracy_score
 from sklearn.model_selection import train_test_split
 
+from rospy import logerr
+from costmap_learning.srv import GetCostmapResponse
 from matrix import OutputMatrix
 
 from pathlib import Path
@@ -44,7 +48,7 @@ class Costmap:
             print("object_id, table_id and context should be possible to be strings")
             return
         if data.shape < (minimum_sample_size, 0) and not optimal_n_components:
-            print("Sample size for object type ", object_id, " is too small. Ignored.")
+            print("Sample size for object type ", object_id, " is too small.")
             return
         self.raw_data = data  # save raw_data so costmaps can be updated or replaced
         if not optimal_n_components:
@@ -69,15 +73,34 @@ class Costmap:
 
     def init_angles_clfs(self, random_state=42):
         angles_by_components = self.sort_angles_to_components()
+        #print("angles by components of object" + self.object_id)
+        #print(angles_by_components)
         ret = [None for i in range(self.clf.n_components)]
         for i in range(0, self.clf.n_components):
+            # If the there is only one angle for a component of a GMM, ...
             if len(angles_by_components[i]) == 1:
-                pseudo_data = [angles_by_components[i], angles_by_components[i]]
-                ret[i] = GaussianMixture(n_components=1, random_state=random_state,
+                pseudo_data = [angles_by_components[i], angles_by_components[i]] # the point will be appended again, ...
+                ret[i] = GaussianMixture(n_components=1, random_state=random_state, # so the GMM can be initialized.
                                          init_params="kmeans").fit(np.array(pseudo_data).reshape(-1, 1))
             else:
                 ret[i] = GaussianMixture(n_components=1, random_state=random_state,
                                          init_params="kmeans").fit(np.array(angles_by_components[i]).reshape(-1, 1))
+                var = ret[i].covariances_[0]
+                # If the variance is bigger than pi we only take a look at the range(0, pi) or range(0, -pi)
+                if var > pi:
+                    mean  = ret[i].means_[0]
+                    mean_smaller_zero = mean < 0
+                    offset = -2 * pi if mean_smaller_zero else 2 * pi
+                    arranged_angles = []
+                    for angle in angles_by_components[i]:
+                        if mean_smaller_zero and angle > 0 or not mean_smaller_zero and angle < 0:
+                            arranged_angles.append(angle + offset)
+                        else:
+                            arranged_angles.append(angle)
+                    ret[i] = GaussianMixture(n_components=1, random_state=random_state,
+                                             init_params="kmeans").fit(np.array(np.array(arranged_angles).reshape(-1, 1)))
+
+
         return ret
 
     def sort_angles_to_components(self):
@@ -182,17 +205,16 @@ class Costmap:
                 mean = relation.angles_clfs[component_i].means_[0]
                 cov = relation.angles_clfs[component_i].covariances_[0]
                 angles.extend([mean, cov])
-            output_matrix = OutputMatrix.summarize(output_matrices)
-            ros_costmap_response = output_matrix.get_ros_costmap_response()
+            ros_costmap_response = OutputMatrix.get_ros_costmap_response(output_matrices)
             ros_costmap_response.angles = angles
             return ros_costmap_response
         else:
-            output_matrix = []
-            if not cs:
-                output_matrix = OutputMatrix.summarize(self.output_matrices)
+            filtered_output_matrices = []
+            if cs:
+                filtered_output_matrices = np.array(self.output_matrices)[cs]
             else:
-                output_matrix = OutputMatrix.summarize(np.array(self.output_matrices)[cs])
-            ros_costmap_response = output_matrix.get_ros_costmap_response()
+                filtered_output_matrices = np.array(self.output_matrices)
+            ros_costmap_response = OutputMatrix.get_ros_costmap_response(filtered_output_matrices)
             angles = []
             indices = range(0, len(self.output_matrices)) if not cs else cs
             for i in indices:
@@ -351,7 +373,7 @@ class Costmap:
             ax.add_patch(Ellipse(position, nsig * v[0], nsig * v[1],
                                  180. + angle, **kwargs))
 
-    def costmap_to_output_matrices(self, with_closest=True):
+    def costmap_to_output_matrices(self, with_closest=True, max_width_or_height=10000):
         with Cache(self.cache.directory) as reference:
             cached_output_matrices = []
             for i in range(0, self.clf.n_components):
@@ -362,7 +384,13 @@ class Costmap:
                 print("Loaded Cache for " + self.object_id)
                 return cached_output_matrices
 
-        print("No cache found for " + self.object_id + ". Creating one.")
+        if "from" in self.x_name:
+            placement=" storage"
+        elif "to" in self.x_name:
+            placement=" destination"
+        else:
+            placement=""
+        print("No cache found for output matrix of " + self.object_id +  placement + " placements. Creating one.")
         output_matrices = []
         for i in range(0, self.clf.n_components):
             empty_output_matrix, angle = self.get_boundries(component_i=i)
@@ -372,7 +400,17 @@ class Costmap:
             y_0 = empty_output_matrix.y
             columns = abs(int(width / self.resolution))
             rows = abs(int(height / self.resolution))
-            res = np.zeros((rows, columns))
+            if rows > max_width_or_height or columns > max_width_or_height:
+                logerr("Failed to created output_matrix for %s, since output matrix with width %d and height %d is to "
+                       "big. Please check the coordinates of %s or lower the resolution.",
+                       self.object_id, columns, rows, self.object_id)
+                exit()
+            try:
+                res = np.zeros((rows, columns))
+            except MemoryError:
+                logerr("Failed to created output_matrix for %s. Please check the coordinates of %s.",
+                       self.object_id, self.object_id)
+                exit()
             #arr_row = np.arange(x_0, x_0 + width, self.resolution).reshape(1, columns)
             #arr_column = np.flip(np.arange(y_0, y_0 + height, self.resolution)).reshape(rows, 1)
             #arr_rows = np.copy(res)
