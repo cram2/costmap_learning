@@ -98,7 +98,7 @@ class VRItem:
                 relation_costmaps.append(prob_relation_costmap)
 
             ret_costmaps = relation_costmaps[:]
-            print(ret_costmaps)
+            #print(ret_costmaps)
 
             # Coordinates and types of objects which are not of the type base_object_name
             x_object_positions_and_type = [(x, type) for type, x in zip(placed_object_types, x_object_positions) if
@@ -119,21 +119,21 @@ class VRItem:
                         clf = next(i.dest_costmap.clf for i in costmaps_to_placed_object_types
                                    if i.object_id == relation_object_name)
                         relation_label = clf.predict(sample)[0]
-                        print(related_costmap.object_id)
-                        print("relation_label")
-                        print(relation_label)
-                        print("label")
-                        print(relation_label)
+                        #print(related_costmap.object_id)
+                        #print("relation_label")
+                        #print(relation_label)
+                        #print("label")
+                        #print(relation_label)
                         # if relation_label == 0 and \ # <- the 2 gmm relation way <- the 2 gmm relation way and uncomment the next if head
                         #        "<->" + str(type) + label in related_costmap.object_id and \
                         #        related_costmap in ret_costmaps:
                         if "<->" + str(type) + str(relation_label) in related_costmap.object_id and \
                                 related_costmap in ret_costmaps:
-                            print("removed:")
-                            print(related_costmap.object_id)
+                            #print("removed:")
+                            #print(related_costmap.object_id)
                             ret_costmaps.remove(related_costmap)
-            print(ret_costmaps)
-            print("end")
+            #print(ret_costmaps)
+            #print("end")
             if ret_costmaps:
                 return object_id_costmap.costmap_to_ros_getcostmapresponse(relations=ret_costmaps)
 
