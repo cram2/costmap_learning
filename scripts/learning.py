@@ -1,6 +1,10 @@
 # coding: utf-8
 import numpy as np
 import pandas as pd
+import matplotlib as plt
+import matplotlib.patches as mpatches
+import seaborn as sns
+from scipy.stats import norm
 from rospy import logwarn
 
 from kitchen import Kitchen
@@ -22,7 +26,7 @@ cram_obj_t_to_vr_obj_t_dict = {
     "BOTTLE": ["HohesCOrange"]
 }  ## TODO: muss mit einer reasoning-fun in die reasoning.py
 
-def fit_data(full_path="/home/thomas/nameisthiscsvname_with_euler_angles_smaller_then_pi_short.csv",
+def fit_data(full_path="/home/thomas/nameisthiscsvname_with_euler_angles_smaller_then_pi_short_rmv_errors.csv",
              kitchen_feature="kitchen_name", human_feature="human_name"):
     vr_data = pd.read_csv(full_path, na_values="NIL").dropna()
     for kitchen_name in np.unique(vr_data[kitchen_feature]):
@@ -33,27 +37,32 @@ def fit_data(full_path="/home/thomas/nameisthiscsvname_with_euler_angles_smaller
 
 
 def get_symbolic_location(req):
+    print("----------------------------------")
+    print("Symbolic location lookup for:")
     storage_p = req.storage
     try:
         object_id = cram_obj_t_to_vr_obj_t_dict[req.object_type][0]
     except KeyError:
         logwarn("%s is no known object_type", req.object_type)
         return
+    print(object_id)
     kitchen_name = str(req.kitchen)
     context = str(req.context)
     human_name = str(req.name)
     table_id = str(req.table_id)
     if storage_p:
         # If only the storage of the object is necessary
-        return kitchens[kitchen_name].get_object_location(
-            object_id)  # TODO: Maybe loc depends from human_name or other params too?
+        print("Storage location:")
+        return kitchens[kitchen_name].get_object_location(object_id)  # TODO: Maybe loc depends from human_name or other params too?
     else:
+        print("Destination location:")
         # Else: Get the location of the object for the context, human_name, kitchen
         return kitchens[kitchen_name].get_object_destination(object_id, context, human_name, table_id)
 
 
 def get_costmap(req):
-    print("Lookup for:")
+    print("----------------------------------")
+    print("Costmap lookup for:")
     try:
         object_id = cram_obj_t_to_vr_obj_t_dict[req.object_type][0]
     except KeyError:
@@ -80,31 +89,110 @@ def get_costmap(req):
         return kitchens[kitchen_name].get_costmap(table_id, context_name, human_name, object_id,
                                                   x_object_positions, y_object_positions, placed_object_types)
 
+def relation_acc(vritem, relation, relation_name, relation_n):
+    if relation_n == 0:
+        relation_name_label = int(relation_name.replace(vritem.object_id, "")[0])
+    elif relation_n == 1:
+        relation_name_label = int(relation_name[-1])
+    samples, y = vritem.dest_costmap.clf.sample(n_samples=100)
+    filtered_samples = []
+    for j in range(0, len(samples)):
+        if y[j] == relation_name_label:
+            filtered_samples.append(samples[j])
+    predicted_relation = relation.clf.predict(filtered_samples)
+    j = 0
+    z = 0
+    for label in predicted_relation:
+        if label == 0:
+            j += 1
+        else:
+            z += 1
+    acc_1 = j / len(predicted_relation)
+    acc_2 = z / len(predicted_relation)
+    return acc_1 if acc_1 > acc_2 else acc_2
 
-def generate_relations_between_items(visualize=False):
+
+def generate_relations_between_items(visualize_costmap=False, visualize_related_costmap=False,
+                                     validate_related_costmap=False, visualize_orientations=False):
     for kitchen in kitchens.values():
-        costmaps = kitchen.humans[0].settings_by_table["rectangular_table"].contexts["TABLE-SETTING"]
+        vritems = kitchen.humans[0].settings_by_table["rectangular_table"].contexts["TABLE-SETTING"]
         i = 0
-        for costmap in costmaps:
-            cpy = list(map(lambda object: object.dest_costmap, costmaps[:]))
-            del cpy[i]
+        for vritem in vritems:
+            # Calculating related costmaps
+            dest_costmaps = list(map(lambda object: object.dest_costmap, vritems[:]))
+            del dest_costmaps[i]
+            vritem.add_related_costmaps(dest_costmaps)
+
             # costmap.dest_costmap.plot_gmm()
             # for i in range(0, costmap.dest_costmap.clf.n_components):
             #    costmap.costmap_to_output_matrices()[i].plot(costmap.dest_costmap.object_id + " component " + str(i))
-            if visualize:
-                costmap.dest_costmap.plot_gmm(plot_in_other=True)
-                costmap.dest_costmap.costmap_to_output_matrix().plot("Destination of " + costmap.object_id)
-                costmap.storage_costmap.plot_gmm(plot_in_other=True)
-                costmap.storage_costmap.output_matrices[0].plot("Storage of " + costmap.object_id)
-            costmap.add_related_costmaps(cpy)
+            if visualize_costmap:
+                vritem.dest_costmap.plot_gmm(plot_in_other=True)
+                vritem.dest_costmap.costmap_to_output_matrix().plot("Destination of " + vritem.object_id)
+                vritem.storage_costmap.plot_gmm(plot_in_other=True)
+                vritem.storage_costmap.output_matrices[0].plot("Storage of " + vritem.object_id)
+            if visualize_orientations:
+                clfs = vritem.dest_costmap.angles_clfs
+                if len(clfs) % 2 == 0:
+                    columns = 2
+                else:
+                    columns = 1
+                rows = int(len(clfs) / columns)
+                fig, axes = plt.subplots(rows, columns, sharex=False, sharey=False, figsize=(6, 8))
+                fig.suptitle("Orientation of " + vritem.dest_costmap.object_id)
+
+                i = 0
+                original_orients = vritem.dest_costmap.sort_angles_to_components()
+                for r in range(rows):
+                    for c in range(columns):
+                        if i == len(clfs):
+                            break
+                        original_orient = np.array(original_orients[i])
+                        samples, shape = clfs[i].sample(n_samples=100)
+                        current_ax = axes.flatten()[r * columns + c]
+                        current_ax.hist(original_orient.flatten(),
+                                        bins=15, density=True, histtype='bar', color=["red"], alpha=1)
+                        sns.distplot(samples.flatten(), bins=15,
+                                     ax=axes.flatten()[r * columns + c],
+                                     hist_kws = {"density": True, "align": "left"},
+                                     norm_hist=False, hist=False,
+                                     kde=False, fit=norm)
+                        # sns.distplot(original_orient.flatten(),
+                        #              ax=axes.flatten()[r * columns + c],
+                        #              color="blue",
+                        #              hist_kws = {"density": False, "align": "right"},
+                        #              norm_hist=True, hist=True,
+                        #              kde=False)
+                        i += 1
+                fig.add_subplot(111, frameon=False)
+                plt.tick_params(labelcolor='none', top=False, bottom=False, left=False, right=False)
+                plt.xlabel("degree [rad]")
+                plt.ylabel("density")
+                red_patch = mpatches.Patch(color='red', label='Original orientations')
+                black_patch = mpatches.Patch(color='black', label='Learned distribution')
+                plt.legend(handles=[red_patch, black_patch])
+                plt.show()
             # Merge relation costmaps and the standard destination costmap
-            # costmap.dest_costmap.plot_gmm(plot_in_other=True)
+            # costmap.desgit_costmap.plot_gmm(plot_in_other=True)
             # costmap.merge_related_into_matrix().plot(costmap.object_id + " with related")
             # plot relation
-            if visualize:
-                for relation_name, relation in costmap.related_costmaps.items():
+            if visualize_related_costmap:
+                for relation_name, relation in vritem.related_costmaps.items():
+                    acc = 0
+                    plot_text = relation.object_id
+                    if validate_related_costmap:
+                        acc = relation_acc(vritem, relation, relation_name, 0)
+                        plot_text += "\n with acc. of " + str(acc) + " for " + vritem.object_id
+                        other_relation_name = relation_name.replace(vritem.object_id, "")[4:-1]
+                        other_vr_item = None
+                        for vri in kitchen.humans[0].settings_by_table["rectangular_table"].contexts["TABLE-SETTING"]:
+                            if vri.object_id == other_relation_name:
+                                other_vr_item = vri
+                        acc = relation_acc(other_vr_item, relation, relation_name, 1)
+                        plot_text += "\n with acc. of " + str(acc) + " for " + other_relation_name
                     relation.plot_gmm(plot_in_other=True)
-                    relation.costmap_to_output_matrix().plot(relation.object_id)
+                    relation.costmap_to_output_matrix().plot(plot_text,name=relation_name)
+
             i += 1
 
 

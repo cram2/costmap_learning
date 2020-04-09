@@ -24,6 +24,7 @@ class Kitchen:
         for human in self.humans:
             locations.append(human.get_object_storage(str(object_id)))
         locations.sort(key=lambda t: t[1])
+        print(locations[0][0])
         return locations[0][0]
 
     def get_object_destination(self, object_id, context, human_name, table_id):
@@ -31,6 +32,7 @@ class Kitchen:
         and table_id"""
         for human in self.humans:
             if human.name == human_name:
+                print("IslandArea")
                 return "IslandArea"
                 #return human.get_object(table_id, context,
                 #object_id).object_storage[0][0] <- bull, since only
@@ -43,7 +45,6 @@ class Kitchen:
                 costmap = human.get_costmap(table_id, context_name, object_id,
                                             x_object_positions, y_object_positions, placed_object_types)
                 print("Returning costmaps")
-                print("")
                 return costmap
 
 
