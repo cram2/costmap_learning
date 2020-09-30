@@ -2,41 +2,41 @@ import numpy as np
 import pandas as pd
 
 from sklearn.mixture import GaussianMixture
-from rospy import loginfo
+from rospy import loginfo, logwarn, logerr, get_param
 
 from matrix import OutputMatrix
 from costmap import Costmap
 
+from_x_name_feature = get_param('from_x_name_feature')
+from_y_name_feature = get_param('from_y_name_feature')
+from_orient_feature = get_param('from_orient_feature')
+to_x_name_feature = get_param('to_x_name_feature')
+to_y_name_feature = get_param('to_y_name_feature')
+to_orient_feature = get_param('to_orient_feature')
 
 class VRItem:
 
-    def __init__(self, object_id, table_id, context, data, random_state=42,
-                 minimum_sample_size=10):
-        self.storage_costmap = Costmap(object_id, table_id, context, data, random_state=random_state,
-                                       x_name="from-x", y_name="from-y", orient_name="from-orient",
-                                       minimum_sample_size=minimum_sample_size,
+    def __init__(self, object_id, table_id, context, data, random_state=42):
+        self.storage_costmap = Costmap(object_id, table_id, context, data, from_x_name_feature,
+                                       from_y_name_feature, from_orient_feature, random_state=random_state,
                                        optimal_n_components=1)
-        self.dest_costmap = Costmap(object_id, table_id, context, data, random_state=random_state,
-                                    x_name="to-x", y_name="to-y", orient_name="to-orient",
-                                    minimum_sample_size=minimum_sample_size)
+        self.dest_costmap = Costmap(object_id, table_id, context, data, to_x_name_feature,
+                                    to_y_name_feature, to_orient_feature, random_state=random_state)
         if not self.storage_costmap or not self.dest_costmap:
-            print("Object with type ", str(object_id), " could not be created.")
+            logerr("(item) Object with type %s could not be created.", object_id)
             return
         try:
             self.context = str(context)
             self.object_id = str(object_id)
             self.table_id = str(table_id)
         except ValueError:
-            print("object_id, table_id and context should be possible to be strings")
-            return
-        if data.shape < (minimum_sample_size, 0):
-            print("Sample size for object type ", object_id, " is too small. Ignored.")
+            logerr("(item) object_id, table_id and context should be possible to be strings")
             return
         self.raw_data = data  # save raw_data so costmaps can be updated or replaced
         self.object_storage = []  # lists of tuples [('storage_name', number)]
         self.add_object_storage(data)  # saves storage information in self.object_storage
         self.related_costmaps = {}
-        print("Created Item " + self.object_id + ".")
+        loginfo("(item) Created Item %s.", self.object_id)
 
     def get_angles(self, x, y):
         component = self.dest_costmap.clf.predict([[x, y]])

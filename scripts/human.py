@@ -1,5 +1,6 @@
 import numpy as np
 from random import randrange
+from rospy import get_param
 
 from settings import Settings
 
@@ -9,17 +10,13 @@ class Human:
     def __init__(self, name, data_w_tables):
         self.name = name
         self.settings_by_table = {}
-        for table_name in np.unique(data_w_tables["table_name"]):
-            self.add_table(str(table_name), data_w_tables.loc[data_w_tables["table_name"] == str(table_name)])
+        table_feature = get_param('table_feature')
+        for table_name in np.unique(data_w_tables[table_feature]):
+            table_data = data_w_tables.loc[data_w_tables[table_feature] == str(table_name)]
+            self.settings_by_table[str(table_name)] = Settings(str(table_name), table_data)
 
-    #    def __init__(self, name, kitchen):
-    #        self.name = name
-    #        self.settings_by_table = {}
-    #        for table_i in range(0, len(kitchen)):
-    #            self.settings_by_table[kitchen.table_ids[table_i]] = costmaps[table_i]
-
-    def add_table(self, table_name, table_data):
-        self.settings_by_table[table_name] = Settings(table_name, table_data)
+    def __eq__(self, other):
+        return self.name == other.name
 
     def get_object_storage(self, object_type):
         tmp = []
@@ -51,11 +48,20 @@ class Human:
         table_name_and_setting = self.settings_by_table[table_name]
         if table_name_and_setting:
             context = table_name_and_setting.contexts[context_name]
-            for costmap in context:
-                if costmap.object_id == object_id:
-                    return costmap
+            for vritem in context:
+                if vritem.object_id == object_id:
+                    return vritem
 
-    def get_costmap(self, table_name, context_name, object_id, x_object_positions, y_object_positions, placed_object_types):
+    def get_storage_costmap(self, context_name, object_id):
+        if self.settings_by_table:
+            table_name_and_setting = list(self.settings_by_table.values())[0]
+            context = table_name_and_setting.contexts[context_name]
+            for vritem in context:
+                if vritem.object_id == object_id:
+                    return vritem.storage_costmap.costmap_to_ros_getcostmapresponse()
+
+
+    def get_destination_costmap(self, table_name, context_name, object_id, x_object_positions, y_object_positions, placed_object_types):
         """ Returns the Costmap for the given arguments wrapped in a GetCostmapResponse object.
 
         First the function checks, if the placed objects are all of the given type object_id. If this is true, a cut
@@ -149,6 +155,3 @@ class Human:
     #    def add_kitchen(self, kitchen):
     #        for table in kitchen.settings_by_table.values():
     #            self.add_table(table)
-
-    def __eq__(self, other):
-        return self.name == other.name

@@ -1,0 +1,53 @@
+<launch>
+
+  <!-- Name of the package -->
+  <param name="package_name" value="costmap_learning" />
+
+  <!-- Name of the csv-file in the package -->
+  <param name="data_csv_file_name" value="nameisthiscsvname_with_euler_angles_smaller_then_pi_short_rmv_errors.csv" />
+
+  <!-- Minimum amount of samples per object type -->
+  <param name="minimum_sample_size" value="10" />
+
+  <!-- Name of the csv-file in the package -->
+  <param name="na_values" value="NIL" />
+
+  <!-- FOLLOWING ONLY THE NAMES OF THE FEATURES IN THE DATA CSV FILE -->
+  <!-- Name of the kitchen feature in the dataset -->
+  <param name="kitchen_feature" value="kitchen_name" />
+
+  <!-- Name of the Human feature in the dataset -->
+  <param name="human_feature" value="human_name" />
+
+  <!-- Name of the Table feature in the dataset -->
+  <param name="table_feature" value="table_name" />
+
+  <!-- Name of the Table feature in the dataset -->
+  <param name="context_feature" value="context" />
+
+  <!-- Name of the Table feature in the dataset -->
+  <param name="object_feature" value="object-type" />
+
+  <!-- Name of the feature saving the storage x coordinates in the dataset -->
+  <param name="from_x_name_feature" value="from-x" />
+
+  <!-- Name of the feature saving the storage y coordinates in the dataset -->
+  <param name="from_y_name_feature" value="from-y" />
+
+  <!-- Name of the feature saving the storage orientations in the dataset -->
+  <param name="from_orient_feature" value="from-orient" />
+
+  <!-- Name of the feature saving the destination x coordinates in the dataset -->
+  <param name="to_x_name_feature" value="to-x" />
+
+  <!-- Name of the feature saving the destination y coordinates in the dataset -->
+  <param name="to_y_name_feature" value="to-y" />
+
+  <!-- Name of the feature saving the destination orientations in the dataset -->
+  <param name="to_orient_feature" value="to-orient" />
+
+  <node pkg="costmap_learning" name="costmap_learning" type="service.py" output="screen">
+  </node>
+    
+
+</launch>

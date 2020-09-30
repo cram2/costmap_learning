@@ -5,7 +5,9 @@ import matplotlib as plt
 import matplotlib.patches as mpatches
 import seaborn as sns
 from scipy.stats import norm
-from rospy import logwarn
+
+from rospy import logdebug, loginfo, logwarn, get_param
+from rospkg import RosPack
 
 from kitchen import Kitchen
 from costmap import *
@@ -26,49 +28,53 @@ cram_obj_t_to_vr_obj_t_dict = {
     "BOTTLE": ["HohesCOrange"]
 }  ## TODO: muss mit einer reasoning-fun in die reasoning.py
 
-def fit_data(full_path="/home/thomas/nameisthiscsvname_with_euler_angles_smaller_then_pi_short_rmv_errors.csv",
-             kitchen_feature="kitchen_name", human_feature="human_name"):
-    vr_data = pd.read_csv(full_path, na_values="NIL").dropna()
+def fit_data(data_path, na_values):
+    kitchen_feature = get_param('kitchen_feature')
+    human_feature = get_param('human_feature')
+    vr_data = pd.read_csv(data_path, na_values=na_values).dropna()
     for kitchen_name in np.unique(vr_data[kitchen_feature]):
         kitchens[kitchen_name] = Kitchen(kitchen_name)
-        kitchens[kitchen_name].fit_data(full_path=full_path,
-                                        kitchen_feature=kitchen_feature,
-                                        human_feature=human_feature)
-
+        kitchens[kitchen_name].fit_data(vr_data, kitchen_feature, human_feature)
 
 def get_symbolic_location(req):
-    print("----------------------------------")
-    print("Symbolic location lookup for:")
+
     storage_p = req.storage
     try:
         object_id = cram_obj_t_to_vr_obj_t_dict[req.object_type][0]
     except KeyError:
         logwarn("%s is no known object_type", req.object_type)
         return
-    print(object_id)
-    kitchen_name = str(req.kitchen)
-    context = str(req.context)
+
     human_name = str(req.name)
+    kitchen_name = str(req.kitchen)
     table_id = str(req.table_id)
+    context = str(req.context)
+
+    # Set kitchen_name and human_name automatically if only
+    # one kitchen and one human is saved.
+    if (len(list(kitchens.keys())) == 1):
+        kitchen = list(kitchens.values())[0]
+        kitchen_name = kitchen.kitchen_id
+        if (len(kitchen.humans) == 1):
+            human_name = kitchen.humans[0].name
+
+    loginfo('(GetCostmapLocation) Symbolic location lookup for %s', object_id)
     if storage_p:
         # If only the storage of the object is necessary
-        print("Storage location:")
+        loginfo("(GetCostmapLocation) Storage location:")
         return kitchens[kitchen_name].get_object_location(object_id)  # TODO: Maybe loc depends from human_name or other params too?
     else:
-        print("Destination location:")
         # Else: Get the location of the object for the context, human_name, kitchen
+        loginfo("(GetCostmapLocation) Destination location:")
         return kitchens[kitchen_name].get_object_destination(object_id, context, human_name, table_id)
 
 
 def get_costmap(req):
-    print("----------------------------------")
-    print("Costmap lookup for:")
     try:
         object_id = cram_obj_t_to_vr_obj_t_dict[req.object_type][0]
     except KeyError:
-        logwarn("%s is no known object_type", req.object_type)
+        logwarn("(GetCostmap) %s is no known object_type", req.object_type)
         return
-    print(object_id)
     x_object_positions = req.placed_x_object_positions
     y_object_positions = req.placed_y_object_positions
     placed_object_types = req.placed_object_types
@@ -77,17 +83,30 @@ def get_costmap(req):
     if (len(x_object_positions) != len(y_object_positions)):
         raise Exception("x_base_object_positions and y_base_object_positions does not have the same length.")
         return
+
     context_name = req.context
-    print(context_name)
     human_name = req.name
-    print(human_name)
     kitchen_name = req.kitchen
-    print(kitchen_name)
     table_id = req.table_id
-    print(table_id)
-    if True:  # k and table_id in k.table_ids:
-        return kitchens[kitchen_name].get_costmap(table_id, context_name, human_name, object_id,
-                                                  x_object_positions, y_object_positions, placed_object_types)
+
+    # Set kitchen_name and human_name automatically if only
+    # one kitchen and one human is saved.
+    if (len(list(kitchens.keys())) == 1):
+        kitchen = list(kitchens.values())[0]
+        kitchen_name = kitchen.kitchen_id
+        if (len(kitchen.humans) == 1):
+            human_name = kitchen.humans[0].name
+
+    loginfo("(GetCostmap) Costmap lookup for %s", object_id)
+    logdebug("(GetCostmap) with context_name %s", context_name)
+    logdebug("(GetCostmap) with human_name %s", human_name)
+    logdebug("(GetCostmap) with kitchen_name %s", kitchen_name)
+    logdebug("(GetCostmap) with table_id %s", table_id)
+    if False:  # k and table_id in k.table_ids:
+        return kitchens[kitchen_name].get_storage_costmap(context_name, object_id)
+    else:
+        return kitchens[kitchen_name].get_destination_costmap(table_id, context_name, human_name, object_id,
+                                                              x_object_positions, y_object_positions, placed_object_types)
 
 def relation_acc(vritem, relation, relation_name, relation_n):
     if relation_n == 0:
@@ -197,5 +216,11 @@ def generate_relations_between_items(visualize_costmap=False, visualize_related_
 
 
 def init_dataset():
-    fit_data()
+    rospack = RosPack()
+    ros_package_name = get_param('package_name')
+    ros_package_path = rospack.get_path(ros_package_name)
+    csv_file_name = get_param('data_csv_file_name')
+    na_values = get_param('na_values')
+    fit_data(ros_package_path + '/resource/' + csv_file_name, na_values)
+    loginfo("(learning) Initialized data set.")
     generate_relations_between_items()

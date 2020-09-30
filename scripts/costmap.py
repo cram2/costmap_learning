@@ -21,7 +21,7 @@ from sklearn.cluster import KMeans
 from sklearn.metrics import silhouette_samples, silhouette_score, accuracy_score
 from sklearn.model_selection import train_test_split
 
-from rospy import logerr
+from rospy import logerr, get_param
 from costmap_learning.srv import GetCostmapResponse
 from matrix import OutputMatrix
 
@@ -32,10 +32,12 @@ from diskcache import Cache
 CACHE = Cache(str(Path.home()) + "/.cache/costmap_learning") # TODO: DOES NOT SUPPORT DIFFERENT HUMANS, CONTEXTS OR KITCHENS YET
 # TODO: To fix above maybe add reference object to kitchen and add ids of above in one big id together with the current db-id
 
+minimum_sample_size = int(get_param('minimum_sample_size'))
+
 class Costmap:
 
-    def __init__(self, object_id, table_id, context, data, random_state=42,
-                 x_name="x", y_name="y", orient_name="", minimum_sample_size=10, optimal_n_components=None, clf=None):
+    def __init__(self, object_id, table_id, context, data, x_name, y_name, orient_name,
+                 random_state=42, optimal_n_components=None, clf=None):
         try:
             self.resolution = 0.01
             self.context = str(context)
@@ -45,10 +47,10 @@ class Costmap:
             self.y_name = y_name
             self.orient_name = orient_name
         except ValueError:
-            print("object_id, table_id and context should be possible to be strings")
+            logerr("(costmap) object_id, table_id and context should be possible to be strings")
             return
         if data.shape < (minimum_sample_size, 0) and not optimal_n_components:
-            print("Sample size for object type ", object_id, " is too small.")
+            logerr("(costmap) sample size for object type %s is too small.", object_id)
             return
         self.raw_data = data  # save raw_data so costmaps can be updated or replaced
         if not optimal_n_components:
@@ -99,8 +101,6 @@ class Costmap:
                             arranged_angles.append(angle)
                     ret[i] = GaussianMixture(n_components=1, random_state=random_state,
                                              init_params="kmeans").fit(np.array(np.array(arranged_angles).reshape(-1, 1)))
-
-
         return ret
 
     def sort_angles_to_components(self):
@@ -374,23 +374,34 @@ class Costmap:
                                  180. + angle, **kwargs))
 
     def costmap_to_output_matrices(self, with_closest=True, max_width_or_height=10000):
-        with Cache(self.cache.directory) as reference:
-            cached_output_matrices = []
-            for i in range(0, self.clf.n_components):
-                cached_output_matrix = reference.get(self.object_id + str(i))
-                if cached_output_matrix is not None:
-                    cached_output_matrices.append(cached_output_matrix)
-            if cached_output_matrices and len(cached_output_matrices) == self.clf.n_components:
-                print("Loaded Cache for " + self.object_id)
-                return cached_output_matrices
 
         if "from" in self.x_name:
-            placement=" storage"
+            storage_p = True
+            storage_suffix = "_storage"
         elif "to" in self.x_name:
-            placement=" destination"
+            storage_p = False
         else:
-            placement=""
+            raise Exception("Unknown costmap type, neither storage nor destination.")
+
+        with Cache(self.cache.directory) as reference:
+            cached_output_matrices = []
+            if storage_p:
+                cached_output_matrix = reference.get(self.object_id + storage_suffix)
+                if cached_output_matrix:
+                    print("Loaded storage cache for " + self.object_id)
+                    return [cached_output_matrix]
+            else:
+                for i in range(0, self.clf.n_components):
+                    cached_output_matrix = reference.get(self.object_id + str(i))
+                    if cached_output_matrix is not None:
+                        cached_output_matrices.append(cached_output_matrix)
+                if cached_output_matrices and len(cached_output_matrices) == self.clf.n_components:
+                    print("Loaded destination cache for " + self.object_id)
+                    return cached_output_matrices
+
+        placement=" storage" if storage_p else " destination"
         print("No cache found for output matrix of " + self.object_id +  placement + " placements. Creating one.")
+
         output_matrices = []
         for i in range(0, self.clf.n_components):
             empty_output_matrix, angle = self.get_boundries(component_i=i)
@@ -438,7 +449,10 @@ class Costmap:
             output_matrix = empty_output_matrix.copy()
             output_matrix.insert(res)
             with Cache(self.cache.directory) as reference:
-                reference.set(self.object_id + str(i), output_matrix)
+                if storage_p:
+                    reference.set(self.object_id + storage_suffix, output_matrix)
+                else:
+                    reference.set(self.object_id + str(i), output_matrix)
             output_matrices.append(output_matrix)
         return output_matrices
 
