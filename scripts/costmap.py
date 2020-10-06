@@ -34,6 +34,15 @@ CACHE = Cache(str(Path.home()) + "/.cache/costmap_learning") # TODO: DOES NOT SU
 
 minimum_sample_size = int(get_param('minimum_sample_size'))
 
+class CostmapRelation:
+
+    def __init__(self, relation_name, costmap, component, other_costmap, other_component):
+        self.relation_name = relation_name
+        self.costmap = costmap
+        self.component = component
+        self.other_costmap = other_costmap
+        self.other_component = other_component
+
 class Costmap:
 
     def __init__(self, object_id, table_id, context, data, x_name, y_name, orient_name,
@@ -192,18 +201,14 @@ class Costmap:
         # Actually ros_getcostmap_response should contain more costmaps, but CRAM cannot handle it.
         # moreover, the srv GetCostmap should then have lists of width, height, res and Point instead.
         if relations:
-            component_i = 1
             output_matrices = []
             angles = []
             for i in range(0, len(relations)):
-                relation_name = relations[i].object_id
-                object_id_label = int(relation_name[len(relation_name) - 1])
+                object_id_label = relations[i].other_component
                 output_matrices.append(self.output_matrices[object_id_label])
             for relation in relations:
-                #tmp = relation.output_matrices[component_i] # <- the 2 gmm relation way
-                #output_matrices.append(tmp) # <- the 2 gmm relation way and uncomment above for loop
-                mean = relation.angles_clfs[component_i].means_[0]
-                cov = relation.angles_clfs[component_i].covariances_[0]
+                mean = relation.other_costmap.angles_clfs[relation.other_component].means_[0]
+                cov =  relation.other_costmap.angles_clfs[relation.other_component].covariances_[0]
                 angles.extend([mean, cov])
             ros_costmap_response = OutputMatrix.get_ros_costmap_response(output_matrices)
             ros_costmap_response.angles = angles

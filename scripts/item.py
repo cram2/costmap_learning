@@ -5,7 +5,7 @@ from sklearn.mixture import GaussianMixture
 from rospy import loginfo, logwarn, logerr, get_param
 
 from matrix import OutputMatrix
-from costmap import Costmap
+from costmap import Costmap, CostmapRelation
 
 from_x_name_feature = get_param('from_x_name_feature')
 from_y_name_feature = get_param('from_y_name_feature')
@@ -90,10 +90,10 @@ class VRItem:
                 related_to_base_object = []
                 component = self.dest_costmap.clf.predict(sample)[0]
                 for related_costmap in self.related_costmaps.values():
-                    if base_object_name + str(component) in related_costmap.object_id and \
-                            "<->" + relation_object_name in related_costmap.object_id:
+                    if component == related_costmap.component and \
+                            relation_object_name in related_costmap.other_costmap.object_id:
                         related_to_base_object.append(
-                            [related_costmap, related_costmap.clf.predict_proba(sample)[0][0]])
+                            [related_costmap, related_costmap.costmap.clf.predict_proba(sample)[0][0]])
                 prob_relation_costmap = sorted(related_to_base_object, key=lambda c_and_p: c_and_p[1], reverse=True)[0][0]
                 relation_costmaps.append(prob_relation_costmap)
 
@@ -113,7 +113,7 @@ class VRItem:
                 if not type:
                     raise Exception("Types are not equal")
                 for related_costmap in ret_costmaps:
-                    if "<->" + str(type) in related_costmap.object_id:
+                    if str(type) in related_costmap.other_costmap.object_id:
                         # relation_label = related_costmap.clf.predict(sample)[0] # <- the 2 gmm relation way, and uncomment the 2 next lines
                         # label = related_costmap.object_id[len(related_costmap.object_id) - 1] # <- the 2 gmm relation way
                         clf = next(i.dest_costmap.clf for i in costmaps_to_placed_object_types
@@ -127,7 +127,7 @@ class VRItem:
                         # if relation_label == 0 and \ # <- the 2 gmm relation way <- the 2 gmm relation way and uncomment the next if head
                         #        "<->" + str(type) + label in related_costmap.object_id and \
                         #        related_costmap in ret_costmaps:
-                        if "<->" + str(type) + str(relation_label) in related_costmap.object_id and \
+                        if relation_label in related_costmap.other_costmap.object_id and \
                                 related_costmap in ret_costmaps:
                             #print("removed:")
                             #print(related_costmap.object_id)
@@ -195,7 +195,7 @@ class VRItem:
         else:
             print("The given data contains more than one object type or wrong object type data set was given.")
 
-    def add_related_costmaps(self, costmaps, random_state=42, relation_seperation="<->"):
+    def add_related_costmaps(self, costmaps, relation_seperation="<->"):
         for costmap in costmaps:
             if costmap.object_id != self.object_id:
                 if True:
@@ -204,33 +204,9 @@ class VRItem:
                         i = pair[0]
                         j = pair[1]
                         if not (i is None or j is None):
-                            # Copy x, y data from this and other costmap
-                            raw_data_xy = self.raw_data[[self.dest_costmap.x_name, self.dest_costmap.y_name]].copy()
-                            other_raw_data_xy = costmap.raw_data[[costmap.x_name, costmap.y_name]].copy()
-                            # Use only x, y data which are in the component i in self and j in given costmap
-                            raw_data_cpy = self.raw_data[
-                                self.dest_costmap.clf.predict(raw_data_xy.to_numpy()) == i].copy()
-                            other_raw_data_cpy = costmap.raw_data[
-                                costmap.clf.predict(other_raw_data_xy.to_numpy()) == j].copy()
-                            # Merge the filtered x and y data
-                            merged_data = pd.DataFrame().append(raw_data_cpy).append(other_raw_data_cpy)
-                            # Copy the means and cov from the component i in self and j in given costmap
-                            means_i, means_j = self.dest_costmap.clf.means_[i], costmap.clf.means_[j]
-                            cov_i, cov_j = self.dest_costmap.clf.covariances_[i], costmap.clf.covariances_[j]
-                            # create a new GMM representing the relation of self and given costmap
-                            gmm = GaussianMixture(n_components=2, means_init=[means_i, means_j],
-                                                  precisions_init=[np.linalg.inv(cov_i), np.linalg.inv(cov_j)],
-                                                  random_state=random_state)
                             relation_name = self.object_id + str(i) + relation_seperation + costmap.object_id + str(j)
-                            # and save it in self inside a costmap
-                            self.related_costmaps[relation_name] = Costmap(
-                                self.object_id + str(i) + relation_seperation + costmap.object_id + str(j),
-                                self.table_id, self.context, merged_data,
-                                random_state=random_state, optimal_n_components=2,
-                                x_name=self.dest_costmap.x_name, y_name=self.dest_costmap.y_name,
-                                orient_name=self.dest_costmap.orient_name, clf=gmm)
-                            print("Created relation ", self.object_id + str(i) + relation_seperation
-                                  + costmap.object_id + str(j) + ".")
+                            self.related_costmaps[relation_name] = CostmapRelation(relation_name, self.dest_costmap, i, costmap, j)
+                            print("Created relation " + relation_name + ".")
 
     def nearest_components(self, costmap):
         res = []
