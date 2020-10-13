@@ -28,6 +28,12 @@
   <!-- Name of the Table feature in the dataset -->
   <param name="object_feature" value="object-type" />
 
+  <!-- Location where the object was placed -->
+  <param name="to_location_feature" value="to-location" />
+
+  <!-- Location where the object was stored -->
+  <param name="from_location_feature" value="from-location" />
+
   <!-- Name of the feature saving the storage x coordinates in the dataset -->
   <param name="from_x_name_feature" value="from-x" />
 
