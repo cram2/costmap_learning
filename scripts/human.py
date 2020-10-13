@@ -150,8 +150,3 @@ class Human:
                 else:
                     # Return relational costmaps if base_object from the beginning was right
                     return relation_costmaps
-
-
-    #    def add_kitchen(self, kitchen):
-    #        for table in kitchen.settings_by_table.values():
-    #            self.add_table(table)

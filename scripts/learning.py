@@ -29,14 +29,24 @@ cram_obj_t_to_vr_obj_t_dict = {
 }  ## TODO: muss mit einer reasoning-fun in die reasoning.py
 
 def fit_data(data_path, na_values):
+    """This function creates for every kitchen mentioned in the CSV a Kitchen object."""
     kitchen_feature = get_param('kitchen_feature')
     human_feature = get_param('human_feature')
     vr_data = pd.read_csv(data_path, na_values=na_values).dropna()
     for kitchen_name in np.unique(vr_data[kitchen_feature]):
-        kitchens[kitchen_name] = Kitchen(kitchen_name)
-        kitchens[kitchen_name].fit_data(vr_data, kitchen_feature, human_feature)
+        kitchens[kitchen_name] = Kitchen(kitchen_name, vr_data)
+        kitchens[kitchen_name].fit_data(kitchen_feature, human_feature)
 
 def get_symbolic_location(req):
+    """This function answers the request GetSymbolicLocationRequest by getting
+    the object storage or destination location.
+
+
+    :param req: request
+    :type req: GetSymbolicLocationRequest object
+    :returns: location
+    :rtype: GetSymbolicLocationResponse object
+    """
 
     storage_p = req.storage
     try:
@@ -50,26 +60,39 @@ def get_symbolic_location(req):
     table_id = str(req.table_id)
     context = str(req.context)
 
-    # Set kitchen_name and human_name automatically if only
-    # one kitchen and one human is saved.
+    # Set kitchen_name, human_name and context automatically if only
+    # one kitchen, human and context is saved.
     if (len(list(kitchens.keys())) == 1):
         kitchen = list(kitchens.values())[0]
         kitchen_name = kitchen.kitchen_id
         if (len(kitchen.humans) == 1):
             human_name = kitchen.humans[0].name
+        contexts = np.unique(kitchen.raw_data[get_param('context_feature')])
+        if len(contexts) == 1:
+            context = contexts[0]
 
     loginfo('(GetCostmapLocation) Symbolic location lookup for %s', object_id)
     if storage_p:
         # If only the storage of the object is necessary
-        loginfo("(GetCostmapLocation) Storage location:")
-        return kitchens[kitchen_name].get_object_location(object_id)  # TODO: Maybe loc depends from human_name or other params too?
+        location = kitchens[kitchen_name].get_object_location(object_id)
+        loginfo("(GetCostmapLocation) Storage location: %s", location)
     else:
         # Else: Get the location of the object for the context, human_name, kitchen
-        loginfo("(GetCostmapLocation) Destination location:")
-        return kitchens[kitchen_name].get_object_destination(object_id, context, human_name, table_id)
+        location = kitchens[kitchen_name].get_object_destination(object_id, context, human_name, table_id)
+        loginfo("(GetCostmapLocation) Destination location: %s", location)
+    return location
 
 
 def get_costmap(req):
+    """This function answers the request GetCostmapRequest by returning the
+     parameters of the learned GMMs modeling different positions and orientations.
+     Moreover, the boundaries of the position GMMs are returned.
+
+    :param req: request
+    :type req: GetCostmapRequest object
+    :returns: GMMs parameters and boundaries of the position GMMs
+    :rtype: GetCostmapResponse object
+    """
     try:
         object_id = cram_obj_t_to_vr_obj_t_dict[req.object_type][0]
     except KeyError:
@@ -89,26 +112,31 @@ def get_costmap(req):
     kitchen_name = req.kitchen
     table_id = req.table_id
 
-    # Set kitchen_name and human_name automatically if only
-    # one kitchen and one human is saved.
+    # Set kitchen_name, human_name and context automatically if only
+    # one kitchen, human and context is saved.
     if (len(list(kitchens.keys())) == 1):
         kitchen = list(kitchens.values())[0]
         kitchen_name = kitchen.kitchen_id
         if (len(kitchen.humans) == 1):
             human_name = kitchen.humans[0].name
+        contexts = np.unique(kitchen.raw_data[get_param('context_feature')])
+        if len(contexts) == 1:
+            context_name = contexts[0]
 
     loginfo("(GetCostmap) Costmap lookup for %s", object_id)
     logdebug("(GetCostmap) with context_name %s", context_name)
     logdebug("(GetCostmap) with human_name %s", human_name)
     logdebug("(GetCostmap) with kitchen_name %s", kitchen_name)
     logdebug("(GetCostmap) with table_id %s", table_id)
-    if False:  # k and table_id in k.table_ids:
+
+    if req.location == kitchens[kitchen_name].get_object_location(object_id):  # k and table_id in k.table_ids:
         return kitchens[kitchen_name].get_storage_costmap(context_name, object_id)
     else:
         return kitchens[kitchen_name].get_destination_costmap(table_id, context_name, human_name, object_id,
                                                               x_object_positions, y_object_positions, placed_object_types)
 
 def relation_acc(vritem, relation, relation_name, relation_n):
+    """This function calculates the accuracy of the given relation."""
     if relation_n == 0:
         relation_name_label = int(relation_name.replace(vritem.object_id, "")[0])
     elif relation_n == 1:
@@ -133,6 +161,9 @@ def relation_acc(vritem, relation, relation_name, relation_n):
 
 def generate_relations_between_items(visualize_costmap=False, visualize_related_costmap=False,
                                      validate_related_costmap=False, visualize_orientations=False):
+    """This function adds the related costmaps to the already created VRItem objects.
+    Moreover, it allows to visualizes the learned position and orientation GMMs, as well
+    validating the related costmap and visualizes these too."""
     for kitchen in kitchens.values():
         vritems = kitchen.humans[0].settings_by_table["rectangular_table"].contexts["TABLE-SETTING"]
         i = 0
@@ -142,14 +173,12 @@ def generate_relations_between_items(visualize_costmap=False, visualize_related_
             del dest_costmaps[i]
             vritem.add_related_costmaps(dest_costmaps)
 
-            # costmap.dest_costmap.plot_gmm()
-            # for i in range(0, costmap.dest_costmap.clf.n_components):
-            #    costmap.costmap_to_output_matrices()[i].plot(costmap.dest_costmap.object_id + " component " + str(i))
             if visualize_costmap:
                 vritem.dest_costmap.plot_gmm(plot_in_other=True)
                 vritem.dest_costmap.costmap_to_output_matrix().plot("Destination of " + vritem.object_id)
                 vritem.storage_costmap.plot_gmm(plot_in_other=True)
-                vritem.storage_costmap.output_matrices[0].plot("Storage of " + vritem.object_id)
+                vritem.storage_costmap.costmap_to_output_matrix().plot("Storage of " + vritem.object_id)
+
             if visualize_orientations:
                 clfs = vritem.dest_costmap.angles_clfs
                 if len(clfs) % 2 == 0:
@@ -176,12 +205,6 @@ def generate_relations_between_items(visualize_costmap=False, visualize_related_
                                      hist_kws = {"density": True, "align": "left"},
                                      norm_hist=False, hist=False,
                                      kde=False, fit=norm)
-                        # sns.distplot(original_orient.flatten(),
-                        #              ax=axes.flatten()[r * columns + c],
-                        #              color="blue",
-                        #              hist_kws = {"density": False, "align": "right"},
-                        #              norm_hist=True, hist=True,
-                        #              kde=False)
                         i += 1
                 fig.add_subplot(111, frameon=False)
                 plt.tick_params(labelcolor='none', top=False, bottom=False, left=False, right=False)
@@ -191,31 +214,29 @@ def generate_relations_between_items(visualize_costmap=False, visualize_related_
                 black_patch = mpatches.Patch(color='black', label='Learned distribution')
                 plt.legend(handles=[red_patch, black_patch])
                 plt.show()
-            # Merge relation costmaps and the standard destination costmap
-            # costmap.desgit_costmap.plot_gmm(plot_in_other=True)
-            # costmap.merge_related_into_matrix().plot(costmap.object_id + " with related")
-            # plot relation
+
             if visualize_related_costmap:
                 for relation_name, relation in vritem.related_costmaps.items():
                     acc = 0
-                    plot_text = relation.object_id
+                    plot_text = relation.relation_name
                     if validate_related_costmap:
-                        acc = relation_acc(vritem, relation, relation_name, 0)
+                        acc = relation_acc(vritem, relation.costmap, relation_name, 0)
                         plot_text += "\n with acc. of " + str(acc) + " for " + vritem.object_id
                         other_relation_name = relation_name.replace(vritem.object_id, "")[4:-1]
                         other_vr_item = None
                         for vri in kitchen.humans[0].settings_by_table["rectangular_table"].contexts["TABLE-SETTING"]:
                             if vri.object_id == other_relation_name:
                                 other_vr_item = vri
-                        acc = relation_acc(other_vr_item, relation, relation_name, 1)
+                        acc = relation_acc(other_vr_item, relation.other_costmap, relation_name, 1)
                         plot_text += "\n with acc. of " + str(acc) + " for " + other_relation_name
-                    relation.plot_gmm(plot_in_other=True)
-                    relation.costmap_to_output_matrix().plot(plot_text,name=relation_name)
+                    relation.costmap.costmap_to_output_matrices()[relation.component].plot(plot_in_other=True)
+                    relation.other_costmap.costmap_to_output_matrices()[relation.other_component].plot(text=plot_text)
 
             i += 1
 
 
 def init_dataset():
+    """This function initializes the GMM models for the given data saved in the resource directory."""
     rospack = RosPack()
     ros_package_name = get_param('package_name')
     ros_package_path = rospack.get_path(ros_package_name)

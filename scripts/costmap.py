@@ -8,33 +8,27 @@ from mpl_toolkits.mplot3d import Axes3D
 
 import numpy as np
 from math import pi
-from random import randrange
 from scipy import linalg, ndimage
 from scipy.stats import multivariate_normal
-import pandas as pd
+
 from sklearn.exceptions import NotFittedError
-
 from sklearn.mixture import GaussianMixture
-from sklearn.gaussian_process import GaussianProcessClassifier
-from sklearn.gaussian_process.kernels import RBF
 from sklearn.cluster import KMeans
-from sklearn.metrics import silhouette_samples, silhouette_score, accuracy_score
-from sklearn.model_selection import train_test_split
+from sklearn.metrics import silhouette_samples, silhouette_score
 
-from rospy import logerr, get_param
+from rospy import logdebug, logerr, get_param
 from costmap_learning.srv import GetCostmapResponse
 from matrix import OutputMatrix
-
-from pathlib import Path
-from diskcache import Cache
-
-
-CACHE = Cache(str(Path.home()) + "/.cache/costmap_learning") # TODO: DOES NOT SUPPORT DIFFERENT HUMANS, CONTEXTS OR KITCHENS YET
-# TODO: To fix above maybe add reference object to kitchen and add ids of above in one big id together with the current db-id
 
 minimum_sample_size = int(get_param('minimum_sample_size'))
 
 class CostmapRelation:
+    """
+    This class saves the relation between two costmap objects by saving next to the costmaps
+    the components, which are in relation. Moreover, a relation_name needs to be given to identify
+    the relation. Currently the name scheme is the following with separator being the string "<->".:
+        relation_name = costmap.object_id + separator + other_costmap.object_id
+    """
 
     def __init__(self, relation_name, costmap, component, other_costmap, other_component):
         self.relation_name = relation_name
@@ -44,9 +38,30 @@ class CostmapRelation:
         self.other_component = other_component
 
 class Costmap:
+    """
+    This class saves poses and locations of the given object object_id for the table table_id
+    and the given context.
+    """
 
     def __init__(self, object_id, table_id, context, data, x_name, y_name, orient_name,
                  random_state=42, optimal_n_components=None, clf=None):
+        """
+        This constructor creates a Costmap object for each object_id, table_id and context.
+        The positions are represented by GaussianMixture objects with n components, whether
+        the orientations are represented by GaussianMixture objects with 1 component.
+        The positions are only using x and y coordinates and the orientation uses only the z rotation.
+
+        :param object_id: object id
+        :param table_id: table id
+        :param context: context e.g. 'TABLE-SETTING'
+        :param data: data for object_id, table_id and context saving pose information
+        :param x_name: x coordinate feature name for positions
+        :param y_name: y coordinate feature name for positions
+        :param orient_name: z coordinate feature name for orientations
+        :param random_state: seed for RNG
+        :param optimal_n_components: number of components for the position GMM
+        :param clf: position GMM
+        """
         try:
             self.resolution = 0.01
             self.context = str(context)
@@ -61,31 +76,27 @@ class Costmap:
         if data.shape < (minimum_sample_size, 0) and not optimal_n_components:
             logerr("(costmap) sample size for object type %s is too small.", object_id)
             return
-        self.raw_data = data  # save raw_data so costmaps can be updated or replaced
+        # save raw_data so costmaps can be updated or replaced
+        self.raw_data = data
         if not optimal_n_components:
             optimal_n_components = self.get_component_amount(data, random_state=random_state)
-        # X_train, X_test = train_test_split(data[[self.x_name, self.y_name]], test_size=.1)
         self.clf = clf.fit(data[[self.x_name, self.y_name]]) \
             if clf \
             else GaussianMixture(n_components=optimal_n_components, random_state=random_state,
                                  init_params="kmeans").fit(data[[self.x_name, self.y_name]])
         self.angles_clfs = []
         self.angles_clfs = self.init_angles_clfs(random_state=random_state)
-        # kernel = 1.0 * RBF([1.0]) # check if RBF([1.0]) or RBF([1.0, 1.0]) with
-        # https://scikit-learn.org/stable/auto_examples/gaussian_process/plot_gpc.html#sphx-glr-auto-examples-gaussian-process-plot-gpc-py
-        # y = self.clf.predict(X_train) # TODO REPLACE y WITH REAL y!
-        # y_pred = self.clf.predict(X_test)
-        # self.output_clf = GaussianProcessClassifier(kernel=kernel).fit(X_train, y)
-        self.cache = CACHE
-        self.output_matrices = self.costmap_to_output_matrices()
-        # self.plot_gmm(self.clf, data[[self.x_name, self.y_name]])
-        # clf = BayesianGaussianMixture(n_components=5, random_state=random_state).fit(data[[self.x_name, self.y_name]])
-        # self.plot_gmm(clf, data[[self.x_name, self.y_name]])
 
     def init_angles_clfs(self, random_state=42):
+        """
+        This function initializes orientation GMM objects for each
+        component in the position GMM.
+
+        :param random_state: seed for RNG
+        :return: orientation GMMs, which can be indexed by the positions components
+        :rtype: list
+        """
         angles_by_components = self.sort_angles_to_components()
-        #print("angles by components of object" + self.object_id)
-        #print(angles_by_components)
         ret = [None for i in range(self.clf.n_components)]
         for i in range(0, self.clf.n_components):
             # If the there is only one angle for a component of a GMM, ...
@@ -113,6 +124,12 @@ class Costmap:
         return ret
 
     def sort_angles_to_components(self):
+        """
+        This function sorts the orientation samples to the components of the position GMM.
+
+        :return: angles for each position GMM component
+        :rtype: list[list[angle]]
+        """
         angles = self.raw_data[self.orient_name]
         coords = self.raw_data[[self.x_name, self.y_name]]
         component_labels = self.clf.predict(coords)
@@ -122,8 +139,13 @@ class Costmap:
         return ret
 
 
-    def get_boundries(self, n_samples=100, component_i=0, std=7.0):
-        """:return the smallest x0 and y0 value in the GMM and the width and height of given component in GMM"""
+    def get_boundary(self, component_i, n_samples=100, std=7.0):
+        """ This function returns the boundary of one component from the position GMM.
+
+        :param component_i: Return the boundary for this component of the position GMM.
+        :param n_samples: Get n_samples many samples before calculating the boundary
+        :param std: standard deviation
+        :return the smallest x0 and y0 value in the GMM and the width and height of given component in GMM"""
         gmm = self.clf
         X = []
         try:
@@ -147,96 +169,19 @@ class Costmap:
         y0 = mean[1] - (h / 2)
         return OutputMatrix(x0, y0, w, h), angle
 
-    def get_values(self, x, y):
-        r = 0
-        for i in range(0, len(self.clf.means_)):
-            r += self.get_value(x, y, i)
-        return r
-
-    def get_cond_value(self, x, y):
-        p_a = self.get_value(x, y, 0)
-        p_b = self.get_value(x, y, 1)
-        return (p_a * p_b) / p_b # = P(a|b) = P(a, b) / P(b)
-    
-    def get_value(self, x, y, component_i=0):
-        # p_in_component = self.output_clf.predict_proba([[x, y]])[0][component_i]
-        means = self.clf.means_[component_i]
-        covs = self.clf.covariances_[component_i]
-        return multivariate_normal.pdf([[x, y]], mean=means, cov=covs)
-        # U, s, Vt = np.linalg.svd(self.clf.covariances_[component_i])
-        # theta = np.degrees(np.arctan2(U[1, 0], U[0, 0]))
-        # print(theta)
-        # a = round((math.cos(theta)**2)/(2*s_x) +
-        #           (math.sin(theta)**2)/(2*s_y**2), 10)
-        # b = round((-1 * (math.sin(2*theta)/(4*s_x**2))) +
-        #           (math.sin(2*theta)/(4*s_y**2)), 10)
-        # c = round((math.sin(theta)**2/(2*s_x**2)) +
-        #           (math.cos(theta)**2/(2*s_y**2)), 10)
-        # print("x_0 %3.3f, y_0 %3.3f, s_x %3.3f, s_y %3.3d" % (x_mu,
-        #                                                       y_mu,
-        #                                                       s_x, s_y))
-        # try: 
-        #     return 1 * np.exp( -1 * (float(a*(x-x_mu)**2) + 
-        #                              float(2*b*(x-x_mu)*(y-y_mu)) + 
-        #                              float(c*round((round((y-y_mu),10)**2), 10))))
-        # except OverflowError:
-        #     return float('inf')
-        # return 2 * math.exp(-1 * ((((x - x_0) ** 2) / ( 2 * s_x)) + (((y - y_0) ** 2) / ( 2 * s_y))))
-        # return p_in_component * self.clf.predict_proba([[x, y]])[0][component_i]
-
-    def costmap_to_ros_getcostmapresponse(self, relations=None, cs=None):
-        """Returns the given costmaps in a ROS GetCostmapResponse message.
-
-        If there are relations towards self, meaning relations is not empty, these will
-        be evaluated by returning only the components of the Costmap self which are in
-        relation with them. If relations is empty and no valid relation was found, the
-        components of the Costmap self will be returned accordingly to the given components
-        in cs.
-
-        :param relations: contains costmaps which are in relation towards self.object_id
-        :type relations: list
-        :key cs: Optional list of Integers containing indices of components of a GMM
-        :type cs: list
-        """
-        # Actually ros_getcostmap_response should contain more costmaps, but CRAM cannot handle it.
-        # moreover, the srv GetCostmap should then have lists of width, height, res and Point instead.
-        if relations:
-            output_matrices = []
-            angles = []
-            for i in range(0, len(relations)):
-                object_id_label = relations[i].other_component
-                output_matrices.append(self.output_matrices[object_id_label])
-            for relation in relations:
-                mean = relation.other_costmap.angles_clfs[relation.other_component].means_[0]
-                cov =  relation.other_costmap.angles_clfs[relation.other_component].covariances_[0]
-                angles.extend([mean, cov])
-            ros_costmap_response = OutputMatrix.get_ros_costmap_response(output_matrices)
-            ros_costmap_response.angles = angles
-            return ros_costmap_response
-        else:
-            filtered_output_matrices = []
-            if cs:
-                filtered_output_matrices = np.array(self.output_matrices)[cs]
-            else:
-                filtered_output_matrices = np.array(self.output_matrices)
-            ros_costmap_response = OutputMatrix.get_ros_costmap_response(filtered_output_matrices)
-            angles = []
-            indices = range(0, len(self.output_matrices)) if not cs else cs
-            for i in indices:
-                mean = self.angles_clfs[i].means_[0]
-                cov = self.angles_clfs[i].covariances_[0]
-                angles.extend([mean, cov])
-            ros_costmap_response.angles = angles
-            return ros_costmap_response
-
-    def merge(self, other, self_component=0, o_component=0):
-        output_matrix = self.costmap_to_output_matrices()[self_component]
-        other_output_matrix = other.costmap_to_output_matrices()[o_component]
-        return OutputMatrix.merge_matrices([output_matrix, other_output_matrix])
-
     def get_component_amount(self, data, min_n_clusters=2, max_n_clusters=10,
-                             verbose=False, visualize=False, random_state=42):
-        """Returns the optimal amount of components to separate the data with GMMs"""
+                             visualize=False, random_state=42):
+        """ This function returns the optimal amount of components to separate
+        the poses with GMMs by using the silhouette score.
+
+        :param data: pose data for object type, context and table_id
+        :param min_n_clusters: minimum amount of clusters
+        :param max_n_clusters: maximal amount of clusters
+        :param visualize: bool to visualizes the different silhouette scores
+        :param random_state: seed for RNG
+        :returns: number of components
+        :rtype: int
+        """
         if max_n_clusters <= min_n_clusters:
             raise Exception("max_n_clusters has to be bigger than min_n_clusters")
 
@@ -245,9 +190,8 @@ class Costmap:
 
         if visualize:
             clfs = []
-        if verbose:
-            print("Following scores for object-type ",
-                  str(self.object_type), " on table ", str(self.table_id), ":")
+        logdebug("Following scores for object-type %s on table %s:",
+                  str(self.object_id), str(self.table_id))
 
         for n_clusters in range(min_n_clusters, max_n_clusters):
             clf = KMeans(n_clusters=n_clusters, random_state=random_state).fit(X)
@@ -256,16 +200,83 @@ class Costmap:
 
             silhouette_avg = silhouette_score(X, clf.labels_)
             silhouette_avgs.append(silhouette_avg)
-            if verbose:
-                print("For ", n_clusters,
-                      " clusters the average silhouette score is ", silhouette_avg)
+            logdebug("For %d clusters the average silhouette score is %d.",
+                     n_clusters, silhouette_avg)
         if visualize:
             self.vis_clusters_with_silhouette(clfs, X, max_n_clusters, min_n_clusters)
 
         optimal_n_clusters = min_n_clusters + np.argmax(silhouette_avgs)
-        if verbose:
-            print("Optimal n_clusters amount is", optimal_n_clusters)
+        logdebug("The optimal amount of clusters is %d.", optimal_n_clusters)
         return optimal_n_clusters
+
+    def get_clf_params(self, components=None):
+        """
+        This function returns all parameters of the position and orientation GMM, if
+        components None. Otherwise, only the parameters of the clusters given in
+        components are returned.
+
+        :param components: list of components ids
+        :type components: list[int]
+        :return: mean, covariance and weights of the position GMM and means, covariance of the orientation GMM
+        """
+        position_means = np.array([])
+        position_covs = np.array([])
+        weights = np.array([])
+        angle_means = np.array([])
+        angle_covs = np.array([])
+        cs = components if components else range(0, self.clf.n_components)
+        for component_i in cs:
+            position_means = np.append(position_means, self.clf.means_[component_i].flatten())
+            position_covs = np.append(position_covs, self.clf.covariances_[component_i].flatten())
+            weights = np.append(weights, self.clf.weights_[component_i])
+            angle_means = np.append(angle_means, self.angles_clfs[component_i].means_[0])
+            angle_covs = np.append(angle_covs, self.angles_clfs[component_i].covariances_[0])
+        return position_means, position_covs, weights, angle_means, angle_covs
+
+    def costmap_to_ros_getcostmapresponse(self, relations=None, cs=None):
+        """Returns the given costmaps in a ROS GetCostmapResponse message.
+
+        If there are relations towards self, meaning relations is not empty, these will
+        be evaluated by returning only the components of self.clf, which are given in
+        relations. If relations is empty and no valid relation was found, the components
+        of self.clf will be returned accordingly to the given component ids in cs.
+
+        :param relations: contains costmaps which are in relation towards self.object_id
+        :type relations: list[CostmapRelation]
+        :key cs: Optional list of Integers containing indices of components of a GMM
+        :type cs: list[int]
+        """
+
+        ros_costmap_response = GetCostmapResponse()
+
+        # Get inidices of components which should be exported
+        if relations:
+            indices = list(map(lambda r: r.other_component, relations))
+        else:
+            indices = range(0, len(self.clf.weights_)) if not cs else cs
+
+        # Get Params of Position and Angle GMM
+        means, covs, weights, angle_means, angle_covs = self.get_clf_params(components=indices)
+        angles = np.array(list(zip(angle_means, angle_covs))).flatten()
+
+        # Get approximated bottom left point, width and height of each
+        # position component from the position GMM
+        for i in indices:
+            output_matrix, _ = self.get_boundary(i)
+            ros_costmap_response = output_matrix.set_ros_costmap_response(ros_costmap_response)
+
+        logdebug("(costmap) Returning Means:")
+        logdebug(means)
+        logdebug("(costmap) Returning Covariance:")
+        logdebug(covs)
+        logdebug("(costmap) Returning the angles:")
+        logdebug(angles)
+
+        ros_costmap_response.angles = angles
+        ros_costmap_response.means = means
+        ros_costmap_response.covs = covs
+        ros_costmap_response.weights = weights
+        return ros_costmap_response
 
     def vis_clusters_with_silhouette(self, clfs, X, max_n_clusters, min_n_clusters):
         fig, axes = plt.subplots(max_n_clusters - min_n_clusters, 2)
@@ -378,89 +389,53 @@ class Costmap:
             ax.add_patch(Ellipse(position, nsig * v[0], nsig * v[1],
                                  180. + angle, **kwargs))
 
-    def costmap_to_output_matrices(self, with_closest=True, max_width_or_height=10000):
+    #deprecated
+    def get_value(self, x, y, component_i=0):
+        means = self.clf.means_[component_i]
+        covs = self.clf.covariances_[component_i]
+        return multivariate_normal.pdf([[x, y]], mean=means, cov=covs)
 
-        if "from" in self.x_name:
-            storage_p = True
-            storage_suffix = "_storage"
-        elif "to" in self.x_name:
-            storage_p = False
-        else:
-            raise Exception("Unknown costmap type, neither storage nor destination.")
-
-        with Cache(self.cache.directory) as reference:
-            cached_output_matrices = []
-            if storage_p:
-                cached_output_matrix = reference.get(self.object_id + storage_suffix)
-                if cached_output_matrix:
-                    print("Loaded storage cache for " + self.object_id)
-                    return [cached_output_matrix]
-            else:
-                for i in range(0, self.clf.n_components):
-                    cached_output_matrix = reference.get(self.object_id + str(i))
-                    if cached_output_matrix is not None:
-                        cached_output_matrices.append(cached_output_matrix)
-                if cached_output_matrices and len(cached_output_matrices) == self.clf.n_components:
-                    print("Loaded destination cache for " + self.object_id)
-                    return cached_output_matrices
-
-        placement=" storage" if storage_p else " destination"
-        print("No cache found for output matrix of " + self.object_id +  placement + " placements. Creating one.")
-
+    #deprecated
+    def costmap_to_output_matrices(self, max_width_or_height=10000):
         output_matrices = []
+
         for i in range(0, self.clf.n_components):
-            empty_output_matrix, angle = self.get_boundries(component_i=i)
+            empty_output_matrix, angle = self.get_boundary(i)
             width = empty_output_matrix.width
             height = empty_output_matrix.height
             x_0 = empty_output_matrix.x
             y_0 = empty_output_matrix.y
             columns = abs(int(width / self.resolution))
             rows = abs(int(height / self.resolution))
+
             if rows > max_width_or_height or columns > max_width_or_height:
                 logerr("Failed to created output_matrix for %s, since output matrix with width %d and height %d is to "
-                       "big. Please check the coordinates of %s or lower the resolution.",
-                       self.object_id, columns, rows, self.object_id)
+                       "big. Please check the coordinates of %s or lower the resolution.", self.object_id, columns,
+                       rows, self.object_id)
                 exit()
             try:
                 res = np.zeros((rows, columns))
             except MemoryError:
-                logerr("Failed to created output_matrix for %s. Please check the coordinates of %s.",
-                       self.object_id, self.object_id)
+                logerr("Failed to created output_matrix for %s. Please check the coordinates of %s.", self.object_id,
+                       self.object_id)
                 exit()
-            #arr_row = np.arange(x_0, x_0 + width, self.resolution).reshape(1, columns)
-            #arr_column = np.flip(np.arange(y_0, y_0 + height, self.resolution)).reshape(rows, 1)
-            #arr_rows = np.copy(res)
-            #arr_cols = np.copy(res)
-            #for r in rows:
-            #    arr_rows[r] = np.copy(arr_row)
-            #for c in columns:
-            #    arr_cols[:,c] = np.copy(arr_column)
-            #res = list(map(get_value, zip(arr_rows, arr_cols)))
             for r in range(0, rows):
-               for c in range(0, columns):
-                   res[r][c] = self.get_value(empty_output_matrix.x + r * self.resolution,
-                                              empty_output_matrix.y + c * self.resolution,
-                                              i)
-            #print("---")
-            #print(self.object_id)
-            #print(angle)
+                for c in range(0, columns):
+                    res[r][c] = self.get_value(empty_output_matrix.x + r * self.resolution,
+                                               empty_output_matrix.y + c * self.resolution,
+                                               i)
             if angle < 0:
                 angle += 180
             else:
                 angle = 180 - angle
-            #print(angle)
             res = np.copy(ndimage.rotate(res, angle, reshape=False))
             res /= res.max()
             output_matrix = empty_output_matrix.copy()
             output_matrix.insert(res)
-            with Cache(self.cache.directory) as reference:
-                if storage_p:
-                    reference.set(self.object_id + storage_suffix, output_matrix)
-                else:
-                    reference.set(self.object_id + str(i), output_matrix)
             output_matrices.append(output_matrix)
         return output_matrices
 
+    #deprecated
     def costmap_to_output_matrix(self):
         ms = self.costmap_to_output_matrices()
         m = OutputMatrix.summarize(ms)

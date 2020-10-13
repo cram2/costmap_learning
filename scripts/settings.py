@@ -5,6 +5,9 @@ from item import VRItem
 
 
 class Settings:
+    """
+    This class represents different context for a given table.
+    """
 
     def __init__(self, table_id, table_data):
         self.table_id = table_id  # str als id for tables
@@ -40,4 +43,3 @@ class Settings:
                     current_objects[i] = new_object
                 else:
                     self.contexts[context_name].append(new_object)
-

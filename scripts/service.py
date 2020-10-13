@@ -19,7 +19,6 @@ def start_services():
     loginfo("(service) Node is ready.")
     spin()
 
-
 if __name__ == "__main__":
     init_dataset()
     start_services()
