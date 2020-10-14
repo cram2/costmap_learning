@@ -21,6 +21,7 @@ This python package needs atleast Python 3.6 and the following packages:
 ### Ubuntu 16.04
 
 ```
+pip install --upgrade pip
 sudo apt-get install python-catkin-pkg python3-pip
 pip uninstall em
 pip3 install pyyaml empy
@@ -30,6 +31,7 @@ python3.6 -m pip install numpy scipy pandas matplotlib seaborn sklearn
 ### Ubuntu 18.04
 
 ```
+pip install --upgrade pip
 sudo apt-get install python-catkin-pkg python3-pip
 pip uninstall em
 pip install empy
