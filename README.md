@@ -2,9 +2,10 @@
 
 This package allows to learn a two dimensional position distribution and one dimensional orientation distributions
 for different objects. The software architecture supports to use different kitchens, tables, humans and context
-for learning different postion and orientation distributions. The GMMs are learned from one [CSV file](../master/resource), which is 
-exemplary given for the iai_kitchen in iai_maps. Moreover, a launch file is given, which allows to change the CSV
-file feature names, visualizations options and more.
+for learning different postion and orientation distributions. The GMMs are learned from one CSV file, 
+which must be saved in the [resource](../master/resource) folder and its name should be configured in the launch file. 
+Moreover, the launch file allows to change the CSV file feature names, visualizations options during runtime and more.
+This package already contains a data set for the iai_kitchen in iai_maps. 
 
 ## ROS Interface
 
