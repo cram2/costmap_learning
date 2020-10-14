@@ -21,8 +21,8 @@ This python package needs atleast Python 3.6 and the following packages, which c
 ```
 pip uninstall em
 pip install empy
-sudo apt-get install python-catkin-pkg
-pip install numpy scipy pandas matplotlib seaborn sklearn
+sudo apt-get install python-catkin-pkg python3-pip
+pip3 install numpy scipy pandas matplotlib seaborn sklearn
 roscd
 cd ..
 catkin_make
