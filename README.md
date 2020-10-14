@@ -19,6 +19,8 @@ allows to return the parameters of the learned GMMs for a given object type and 
 This python package needs atleast Python 3.6 and the following packages, which can be installed with the following command:
 
 ```
+pip uninstall em
+pip install empy
 pip install numpy scipy pandas matplotlib seaborn sklearn
 ```
 
