@@ -1,6 +1,6 @@
 # Learning Position and Orientation Distributions based on GaussianMixtureModels (GMM)
 
-This package allows to learn two dimensional position distribution and one dimensional orientation distributions
+This package allows to learn a two dimensional position distribution and one dimensional orientation distributions
 for different objects. The software architecture supports to use different kitchens, tables, humans and context
 for learning different postion and orientation distributions. The GMMs are learned from one CSV file, which is 
 exemplary given for the iai_kitchen in iai_maps. Moreover, a launch file is given, which allows to change the CSV
