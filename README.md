@@ -27,7 +27,7 @@ sudo apt-get install python-catkin-pkg python3-pip
 For Ubuntu 16.04 install the python packages with:
 
 ```
-python3.6 -m pip install numpy scipy pandas matplotlib seaborn sklearn
+python3.6 -m pip install numpy scipy pandas matplotlib seaborn sklearn pyyaml
 ```
 
 If you are on Ubuntu 18.04 install them with:
