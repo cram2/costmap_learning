@@ -16,17 +16,29 @@ allows to return the parameters of the learned GMMs for a given object type and 
 
 ## Install
 
-This python package supports Python 2 and 3 and needs some packages, which can be installed with the following command:
+This python package needs atleast Python 3.6 and the following packages:
+
+### Ubuntu 16.04
 
 ```
-pip install numpy scipy pandas matplotlib seaborn sklearn
+pip install --upgrade pip
+sudo apt-get install python-catkin-pkg python3-pip
+pip uninstall em
+pip3 install pyyaml empy
+python3.6 -m pip install numpy scipy pandas matplotlib seaborn sklearn 
 ```
 
-Moreover, the ros dependencies can be installed with:
+### Ubuntu 18.04
 
 ```
-rosdep install costmap_learning
+pip install --upgrade pip
+sudo apt-get install python-catkin-pkg python3-pip
+pip uninstall em
+pip install empy
+pip3 install numpy scipy pandas matplotlib seaborn sklearn
 ```
+
+After that this package can be built with `catkin_make` in your ROS workspace.
 
 ## Executing
 
