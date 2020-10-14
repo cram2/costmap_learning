@@ -35,4 +35,3 @@ To start the ROS service simply include the given launch file in your main launc
 ```
 roslaunch costmap_learning costmap_learning_with_params.launch 
 ```
-
