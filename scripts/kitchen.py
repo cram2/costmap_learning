@@ -82,7 +82,7 @@ class Kitchen:
         if self.humans:
             human = self.humans[0]
             costmap = human.get_storage_costmap(context_name, object_id)
-            loginfo("(kitchen) Returning storage costmaps.")
+            loginfo("(GetCostmap) Returning storage costmaps")
             return costmap
 
     def get_destination_costmap(self, table_id, context_name, human_name, object_id,
@@ -94,5 +94,5 @@ class Kitchen:
             if human.name == human_name:
                 costmap = human.get_destination_costmap(table_id, context_name, object_id,
                                                         x_object_positions, y_object_positions, placed_object_types)
-                loginfo("(kitchen) Returning destination costmaps.")
+                loginfo("(GetCostmap) Returning destination costmaps")
                 return costmap
