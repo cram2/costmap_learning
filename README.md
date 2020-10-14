@@ -23,6 +23,9 @@ pip uninstall em
 pip install empy
 sudo apt-get install python-catkin-pkg
 pip install numpy scipy pandas matplotlib seaborn sklearn
+roscd
+cd ..
+catkin_make
 ```
 
 Moreover, the ros dependencies can be installed with:
