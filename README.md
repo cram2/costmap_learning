@@ -16,24 +16,23 @@ allows to return the parameters of the learned GMMs for a given object type and 
 
 ## Install
 
-This python package needs atleast Python 3.6 and the following packages, which can be installed with the following commands:
+This python package needs atleast Python 3.6 and the following packages:
+
+### Ubuntu 16.04
 
 ```
-pip uninstall em
-pip install empy
 sudo apt-get install python-catkin-pkg python3-pip
-```
-
-For Ubuntu 16.04 install the python packages with:
-
-```
-pip3 install pyyaml
+pip uninstall em
+pip3 install pyyaml empy
 python3.6 -m pip install numpy scipy pandas matplotlib seaborn sklearn 
 ```
 
-If you are on Ubuntu 18.04 install them with:
+### Ubuntu 18.04
 
 ```
+sudo apt-get install python-catkin-pkg python3-pip
+pip uninstall em
+pip install empy
 pip3 install numpy scipy pandas matplotlib seaborn sklearn
 ```
 
