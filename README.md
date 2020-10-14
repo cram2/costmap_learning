@@ -1,11 +1,12 @@
 # Learning Position and Orientation Distributions based on GaussianMixtureModels (GMM)
 
 This package allows to model with GMM a two dimensional position distribution and one dimensional orientation distribution
-for different objects. The software architecture supports to use different kitchens, tables, humans and context
-for learning different postion and orientation distributions. The GMMs are learned from one CSV file, 
+for different objects. The software architecture supports to use different kitchens, tables, humans and contexts
+for learning different position and orientation distributions. The GMMs are learned from one CSV file, 
 which must be saved in the [resource](../master/resource) folder and its name should be configured in the launch file. 
 Moreover, the launch file allows to change the CSV file feature names, visualizations options during runtime and more.
-This package already contains a data set for the iai_kitchen in iai_maps. 
+This package already contains a data set for the iai_kitchen in iai_maps. Lastly, this packages supports ROS kinetic
+and melodic.
 
 ## ROS Interface
 
