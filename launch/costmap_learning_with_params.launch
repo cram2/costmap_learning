@@ -12,7 +12,26 @@
   <!-- Name of the csv-file in the package -->
   <param name="na_values" value="NIL" />
 
-  <!-- FOLLOWING ONLY THE NAMES OF THE FEATURES IN THE DATA CSV FILE -->
+  <!-- !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! -->
+  <!-- !!!!!!!! VISUALIZATIONS OF THE POSITION AND ORIENTATION GMMs !!!!!!!!!!!! -->
+  <!-- !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! -->
+
+  <!-- Visualizes the position GMMs of the different objects -->
+  <param name="visualize_costmap" value="False" />
+
+  <!--- Visualizes the orientation GMMs of the different objects -->
+  <param name="visualize_orientations" value="False" />
+
+  <!-- Visualizes the CostmapRelation objects by plotting its position GMMs -->
+  <param name="visualize_related_costmap" value="False" />
+
+  <!-- Shows if the CostmapRelation objects still have correct distributions -->
+  <param name="validate_related_costmap" value="False" />
+
+  <!-- !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! -->
+  <!--  IN THE FOLLOWING ARE ONLY THE NAMES OF THE FEATURES IN THE DATA CSV FILE -->
+  <!-- !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! -->
+
   <!-- Name of the kitchen feature in the dataset -->
   <param name="kitchen_feature" value="kitchen_name" />
 

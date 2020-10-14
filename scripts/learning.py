@@ -28,24 +28,29 @@ cram_obj_t_to_vr_obj_t_dict = {
     "BOTTLE": ["HohesCOrange"]
 }  ## TODO: muss mit einer reasoning-fun in die reasoning.py
 
+
 def fit_data(data_path, na_values):
-    """This function creates for every kitchen mentioned in the CSV a Kitchen object."""
+    """This function creates for every kitchen mentioned in the CSV a Kitchen object.
+
+    :param data_path: absoulte path of the data file
+    :type data_path: string
+    :param na_values: element representing na values
+    :type na_values: string
+    :rtype: None
+    """
     kitchen_feature = get_param('kitchen_feature')
-    human_feature = get_param('human_feature')
     vr_data = pd.read_csv(data_path, na_values=na_values).dropna()
     for kitchen_name in np.unique(vr_data[kitchen_feature]):
         kitchens[kitchen_name] = Kitchen(kitchen_name, vr_data)
-        kitchens[kitchen_name].fit_data(kitchen_feature, human_feature)
+
 
 def get_symbolic_location(req):
     """This function answers the request GetSymbolicLocationRequest by getting
     the object storage or destination location.
 
-
     :param req: request
-    :type req: GetSymbolicLocationRequest object
-    :returns: location
-    :rtype: GetSymbolicLocationResponse object
+    :returns: symbolic location
+    :rtype: string
     """
 
     storage_p = req.storage
@@ -88,10 +93,9 @@ def get_costmap(req):
      parameters of the learned GMMs modeling different positions and orientations.
      Moreover, the boundaries of the position GMMs are returned.
 
-    :param req: request
-    :type req: GetCostmapRequest object
+    :param req: GetCostmapRequest request
     :returns: GMMs parameters and boundaries of the position GMMs
-    :rtype: GetCostmapResponse object
+    :rtype: GetCostmapResponse
     """
     try:
         object_id = cram_obj_t_to_vr_obj_t_dict[req.object_type][0]
@@ -133,7 +137,9 @@ def get_costmap(req):
         return kitchens[kitchen_name].get_storage_costmap(context_name, object_id)
     else:
         return kitchens[kitchen_name].get_destination_costmap(table_id, context_name, human_name, object_id,
-                                                              x_object_positions, y_object_positions, placed_object_types)
+                                                              x_object_positions, y_object_positions,
+                                                              placed_object_types)
+
 
 def relation_acc(vritem, relation, relation_name, relation_n):
     """This function calculates the accuracy of the given relation."""
@@ -159,80 +165,95 @@ def relation_acc(vritem, relation, relation_name, relation_n):
     return acc_1 if acc_1 > acc_2 else acc_2
 
 
-def generate_relations_between_items(visualize_costmap=False, visualize_related_costmap=False,
-                                     validate_related_costmap=False, visualize_orientations=False):
+def generate_relations_between_items():
     """This function adds the related costmaps to the already created VRItem objects.
     Moreover, it allows to visualizes the learned position and orientation GMMs, as well
     validating the related costmap and visualizes these too."""
+
+    visualize_costmap = get_param('visualize_costmap')
+    visualize_related_costmap = get_param('visualize_related_costmap')
+    validate_related_costmap = get_param('validate_related_costmap')
+    visualize_orientations = get_param('visualize_orientations')
+
     for kitchen in kitchens.values():
-        vritems = kitchen.humans[0].settings_by_table["rectangular_table"].contexts["TABLE-SETTING"]
-        i = 0
-        for vritem in vritems:
-            # Calculating related costmaps
-            dest_costmaps = list(map(lambda object: object.dest_costmap, vritems[:]))
-            del dest_costmaps[i]
-            vritem.add_related_costmaps(dest_costmaps)
 
-            if visualize_costmap:
-                vritem.dest_costmap.plot_gmm(plot_in_other=True)
-                vritem.dest_costmap.costmap_to_output_matrix().plot("Destination of " + vritem.object_id)
-                vritem.storage_costmap.plot_gmm(plot_in_other=True)
-                vritem.storage_costmap.costmap_to_output_matrix().plot("Storage of " + vritem.object_id)
+        tables = np.unique(kitchen.raw_data[get_param('table_feature')])
+        contexts = np.unique(kitchen.raw_data[get_param('context_feature')])
 
-            if visualize_orientations:
-                clfs = vritem.dest_costmap.angles_clfs
-                if len(clfs) % 2 == 0:
-                    columns = 2
-                else:
-                    columns = 1
-                rows = int(len(clfs) / columns)
-                fig, axes = plt.subplots(rows, columns, sharex=False, sharey=False, figsize=(6, 8))
-                fig.suptitle("Orientation of " + vritem.dest_costmap.object_id)
+        for table in tables:
+            for context in contexts:
 
-                i = 0
-                original_orients = vritem.dest_costmap.sort_angles_to_components()
-                for r in range(rows):
-                    for c in range(columns):
-                        if i == len(clfs):
-                            break
-                        original_orient = np.array(original_orients[i])
-                        samples, shape = clfs[i].sample(n_samples=100)
-                        current_ax = axes.flatten()[r * columns + c]
-                        current_ax.hist(original_orient.flatten(),
-                                        bins=15, density=True, histtype='bar', color=["red"], alpha=1)
-                        sns.distplot(samples.flatten(), bins=15,
-                                     ax=axes.flatten()[r * columns + c],
-                                     hist_kws = {"density": True, "align": "left"},
-                                     norm_hist=False, hist=False,
-                                     kde=False, fit=norm)
+                vritems_per_human = kitchen.get_all_objects(table, context)
+
+                for vritems in vritems_per_human:
+                    for vritem in vritems:
+
+                        i = 0
+                        # Calculating related costmaps
+                        dest_costmaps = list(map(lambda object: object.dest_costmap, vritems[:]))
+                        del dest_costmaps[i]
+                        vritem.add_related_costmaps(dest_costmaps)
+
+                        if visualize_costmap:
+                            vritem.dest_costmap.plot_gmm(plot_in_other=True)
+                            vritem.dest_costmap.costmap_to_output_matrix().plot("Destination of " + vritem.object_id)
+                            vritem.storage_costmap.plot_gmm(plot_in_other=True)
+                            vritem.storage_costmap.costmap_to_output_matrix().plot("Storage of " + vritem.object_id)
+
+                        if visualize_orientations:
+                            clfs = vritem.dest_costmap.angles_clfs
+                            if len(clfs) % 2 == 0:
+                                columns = 2
+                            else:
+                                columns = 1
+                            rows = int(len(clfs) / columns)
+                            fig, axes = plt.subplots(rows, columns, sharex=False, sharey=False, figsize=(6, 8))
+                            fig.suptitle("Orientation of " + vritem.dest_costmap.object_id)
+
+                            i = 0
+                            original_orients = vritem.dest_costmap.sort_angles_to_components()
+                            for r in range(rows):
+                                for c in range(columns):
+                                    if i == len(clfs):
+                                        break
+                                    original_orient = np.array(original_orients[i])
+                                    samples, shape = clfs[i].sample(n_samples=100)
+                                    current_ax = axes.flatten()[r * columns + c]
+                                    current_ax.hist(original_orient.flatten(),
+                                                    bins=15, density=True, histtype='bar', color=["red"], alpha=1)
+                                    sns.distplot(samples.flatten(), bins=15,
+                                                ax=axes.flatten()[r * columns + c],
+                                                hist_kws={"density": True, "align": "left"},
+                                                norm_hist=False, hist=False,
+                                                kde=False, fit=norm)
+                                    i += 1
+                            fig.add_subplot(111, frameon=False)
+                            plt.tick_params(labelcolor='none', top=False, bottom=False, left=False, right=False)
+                            plt.xlabel("degree [rad]")
+                            plt.ylabel("density")
+                            red_patch = mpatches.Patch(color='red', label='Original orientations')
+                            black_patch = mpatches.Patch(color='black', label='Learned distribution')
+                            plt.legend(handles=[red_patch, black_patch])
+                            plt.show()
+
+                        if visualize_related_costmap:
+                            for relation_name, relation in vritem.related_costmaps.items():
+                                acc = 0
+                                plot_text = relation.relation_name
+                                if validate_related_costmap:
+                                    acc = relation_acc(vritem, relation.costmap, relation_name, 0)
+                                    plot_text += "\n with acc. of " + str(acc) + " for " + vritem.object_id
+                                    other_relation_name = relation_name.replace(vritem.object_id, "")[4:-1]
+                                    other_vr_item = None
+                                    for vri in vritems:
+                                        if vri.object_id == other_relation_name:
+                                            other_vr_item = vri
+                                    acc = relation_acc(other_vr_item, relation.other_costmap, relation_name, 1)
+                                    plot_text += "\n with acc. of " + str(acc) + " for " + other_relation_name
+                                relation.costmap.costmap_to_output_matrices()[relation.component].plot(plot_in_other=True)
+                                relation.other_costmap.costmap_to_output_matrices()[relation.other_component].plot(text=plot_text)
+
                         i += 1
-                fig.add_subplot(111, frameon=False)
-                plt.tick_params(labelcolor='none', top=False, bottom=False, left=False, right=False)
-                plt.xlabel("degree [rad]")
-                plt.ylabel("density")
-                red_patch = mpatches.Patch(color='red', label='Original orientations')
-                black_patch = mpatches.Patch(color='black', label='Learned distribution')
-                plt.legend(handles=[red_patch, black_patch])
-                plt.show()
-
-            if visualize_related_costmap:
-                for relation_name, relation in vritem.related_costmaps.items():
-                    acc = 0
-                    plot_text = relation.relation_name
-                    if validate_related_costmap:
-                        acc = relation_acc(vritem, relation.costmap, relation_name, 0)
-                        plot_text += "\n with acc. of " + str(acc) + " for " + vritem.object_id
-                        other_relation_name = relation_name.replace(vritem.object_id, "")[4:-1]
-                        other_vr_item = None
-                        for vri in kitchen.humans[0].settings_by_table["rectangular_table"].contexts["TABLE-SETTING"]:
-                            if vri.object_id == other_relation_name:
-                                other_vr_item = vri
-                        acc = relation_acc(other_vr_item, relation.other_costmap, relation_name, 1)
-                        plot_text += "\n with acc. of " + str(acc) + " for " + other_relation_name
-                    relation.costmap.costmap_to_output_matrices()[relation.component].plot(plot_in_other=True)
-                    relation.other_costmap.costmap_to_output_matrices()[relation.other_component].plot(text=plot_text)
-
-            i += 1
 
 
 def init_dataset():

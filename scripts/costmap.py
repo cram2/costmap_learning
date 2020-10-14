@@ -1,5 +1,3 @@
-import math
-
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
 from matplotlib.patches import Ellipse
@@ -28,9 +26,18 @@ class CostmapRelation:
     the components, which are in relation. Moreover, a relation_name needs to be given to identify
     the relation. Currently the name scheme is the following with separator being the string "<->".:
         relation_name = costmap.object_id + separator + other_costmap.object_id
+    For more information see the function add_related_costmaps in item.py.
     """
 
     def __init__(self, relation_name, costmap, component, other_costmap, other_component):
+        """This constuctor creates a CostmapRelation object given the parameters.
+
+        :param relation_name: name of the relation
+        :type relation_name: string
+        :type costmap: Costmap
+        :type component: int
+        :type other_costmap: Costmap
+        :type other_component: int"""
         self.relation_name = relation_name
         self.costmap = costmap
         self.component = component
@@ -94,7 +101,7 @@ class Costmap:
 
         :param random_state: seed for RNG
         :return: orientation GMMs, which can be indexed by the positions components
-        :rtype: list
+        :rtype: list[GaussianMixture]
         """
         angles_by_components = self.sort_angles_to_components()
         ret = [None for i in range(self.clf.n_components)]
@@ -128,7 +135,7 @@ class Costmap:
         This function sorts the orientation samples to the components of the position GMM.
 
         :return: angles for each position GMM component
-        :rtype: list[list[angle]]
+        :rtype: list[list[float]]
         """
         angles = self.raw_data[self.orient_name]
         coords = self.raw_data[[self.x_name, self.y_name]]

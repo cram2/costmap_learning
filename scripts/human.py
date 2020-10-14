@@ -4,10 +4,19 @@ from rospy import get_param
 
 from settings import Settings
 
-
 class Human:
+    """
+    This class represents a human by saving its name and Setting objects for every context.
+    """
 
     def __init__(self, name, data_w_tables):
+        """This constructor creates a Human object by saving its name and creating
+        Setting objects which are saved for every table the human interacted with.
+
+        :param name: name id
+        :type name: string
+        :param data_w_tables: data for the human
+        :type data_w_tables: DataFrame"""
         self.name = name
         self.settings_by_table = {}
         table_feature = get_param('table_feature')
@@ -21,17 +30,19 @@ class Human:
     def get_object_storage(self, object_type):
         tmp = []
         for name_and_setting in self.settings_by_table.items():
-            #print(name_and_setting)
             for context_name_and_costmaps in name_and_setting[1].contexts.items():
-                #print(context_name_and_costmaps)
                 for costmap in context_name_and_costmaps[1]:
-                    #print(object_type)
-                    #print(costmap.object_id)
                     if costmap.object_id == str(object_type):
                         tmp.append(costmap.object_storage[0])
         tmp.sort(key=lambda t: t[1], reverse=True)
-        #print(tmp[0])
         return tmp[0]
+
+    def get_all_objects(self, table_name, context_name):
+        """Returns all VRItem objects saved."""
+        setting = self.settings_by_table[table_name]
+        if setting:
+            vritems = setting.contexts[context_name]
+            return vritems
 
     def get_object(self, table_name, context_name, object_id):
         """ Returns the VRItem object corresponding to the given parameters.
@@ -45,12 +56,10 @@ class Human:
             :returns: VRItem object for parameters
             :rtype: VRItem
         """
-        table_name_and_setting = self.settings_by_table[table_name]
-        if table_name_and_setting:
-            context = table_name_and_setting.contexts[context_name]
-            for vritem in context:
-                if vritem.object_id == object_id:
-                    return vritem
+        vritems = self.get_all_objects(table_name, context_name)
+        for vritem in vritems:
+            if vritem.object_id == object_id:
+                return vritem
 
     def get_storage_costmap(self, context_name, object_id):
         if self.settings_by_table:

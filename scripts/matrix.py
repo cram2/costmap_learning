@@ -4,6 +4,8 @@ import numpy as np
 from geometry_msgs.msg import Point
 
 class OutputMatrix(object):
+    """This class mainly saves boundaries in a two dimensional space.
+    Moreover, it allows to visualizes discrete values saved in the matrix."""
 
     def __init__(self, x, y, width, height):
         self.resolution = 0.01

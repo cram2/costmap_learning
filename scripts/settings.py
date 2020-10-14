@@ -10,6 +10,8 @@ class Settings:
     """
 
     def __init__(self, table_id, table_data):
+        """This constructor creates an Setting object given a table id
+        and the data for it."""
         self.table_id = table_id  # str als id for tables
         self.contexts = {}  # list of objects for each dict elem
         context_feature = get_param('context_feature')
@@ -18,6 +20,9 @@ class Settings:
             self.add_context_per_object_type(str(context), context_data)
 
     def add_context_per_object_type(self, context_name, context_data):
+        """This function allows to set and update the context data
+        given its context_name and the data for it."""
+
         # Init list of objects for specific context in self.contexts
         if context_name not in self.contexts.keys():
             self.contexts[context_name] = []
