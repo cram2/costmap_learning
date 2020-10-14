@@ -2,7 +2,7 @@
 
 This package allows to learn a two dimensional position distribution and one dimensional orientation distributions
 for different objects. The software architecture supports to use different kitchens, tables, humans and context
-for learning different postion and orientation distributions. The GMMs are learned from one [CSV file](../resource), which is 
+for learning different postion and orientation distributions. The GMMs are learned from one [CSV file](../master/resource), which is 
 exemplary given for the iai_kitchen in iai_maps. Moreover, a launch file is given, which allows to change the CSV
 file feature names, visualizations options and more.
 
