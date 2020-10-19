@@ -48,19 +48,18 @@ The ROS-Interface has two services called `GetCostmap` and `GetSymbolicLocation`
 allows to return the symbolic storage or destination location of given object type. The service `GetCostmap` then
 allows to return the parameters of the learned GMMs for a given object type and location. 
 
-### GetCostmap
-
-#### Request
-The request takes a CRAM object_type (e.g. "BOWL"), context (e.g. "TABLE-SETTING"), name (e.g. "THOMAS"), enironment name kitchen (e.g. "KITCHEN"), table name table_id (e.g. "rectangular_table") and location string saving for which location the costmap should be returned. Optionally, the request can include the x and y coordinates (placed_x_object_positions and placed_y_object_positions) of already placed objects, aswell as their object types as string (placed_object_types).
-
-#### Response
-The response returns the means, covariances and weights (means, covs, weights) of the positional GMMs. These can be directly inputed in GMMs models. Moreover,
-the reponse returns the boundry boxes of these distributions, which are rougly $3\cdot\sqrt\sigma$ away from each mean. The widhts and height values in meter of these boundry boxes are saved in the parameters widhts and heights. Lastly, the parameter angles returns the one dimensional orientation distribution by returning the means and covarinaces repeatably for each positional distribution. 
-
 ### GetSymbolicLocation
 
 #### Request
-The request takes a CRAM object_type (e.g. "BOWL"), context (e.g. "TABLE-SETTING"), name (e.g. "THOMAS"), enironment name kitchen (e.g. "KITCHEN"), table name table_id (e.g. "rectangular_table") and boolean saving if the requested symbolic location should the storage or destination of the object.
+The request takes a CRAM `object_type` (e.g. "BOWL"), `context` (e.g. "TABLE-SETTING"), `name` (e.g. "THOMAS"), environment name `kitchen` (e.g. "KITCHEN"), table name `table_id` (e.g. "rectangular_table") and boolean `storage` saving if the requested symbolic location should the storage or destination location of the object.
 
 #### Response
-The response is the requested location saved as a string.
+The response is the requested `location` saved as a string.
+
+### GetCostmap
+
+#### Request
+The request takes a CRAM `object_type` (e.g. "BOWL"), `context` (e.g. "TABLE-SETTING"), `name` (e.g. "THOMAS"), environment name `kitchen` (e.g. "KITCHEN"), table name `table_id` (e.g. "rectangular_table") and `location` string saving for which location the costmap should be returned. Optionally, the request can include the x and y coordinates (`placed_x_object_positions` and `placed_y_object_positions`) of already placed objects, aswell as their object types as string (`placed_object_types`).
+
+#### Response
+The response returns the means, covariances and weights (`means`, `covs`, `weights`) of the positional GMMs. Moreover, the reponse returns the boundry boxes of these distributions, which are rougly $3\cdot\sqrt\sigma$ away from each mean. The boundry boxes are encoded with geometry_msgs/Points in `bottem_lefts` and floats in `widths` and `heights`. The `widhts` and `heights` values of these boundry boxes are saved in meters. Lastly, the parameter `angles` returns the one dimensional orientation distribution by returning the means and covarinaces repeatably for each positional distribution. 
